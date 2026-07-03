@@ -32,7 +32,11 @@ view AND edit.** It replaces the **Projects** card in the AIO dashboard.
   heading's ▾ gutter chevron to hide everything under it until the next
   same-or-higher heading (state saved via `data-collapsed`). Styling for headings,
   chevrons, lists, links, and the placeholder lives in `globals.css` under
-  `.rich-editor`.
+  `.rich-editor`. **Paste** is forced to plain text so it inherits the note's
+  styling. The formatting controls live in a **floating, centered pill** fixed to
+  the bottom of the note that rides above the on-screen keyboard (VisualViewport
+  API, `kbInset`) and can be **tucked away** to an "Aa" chip (persisted in
+  `localStorage['notes_fmtbar_open']`). Links open on a plain tap.
 - **To-Do List** — checklist rows (`items[]` with `done`), tap to complete. Each row
   can carry an optional **due date** (stored in `item.date`); the row shows a colored
   Overdue / Due today / Due in Nd chip.
