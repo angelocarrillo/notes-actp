@@ -23,13 +23,32 @@ notes can be shared with other people by their Google email — shared recipient
 view AND edit.** It replaces the **Projects** card in the AIO dashboard.
 
 ### Note types (templates)
-- **Blank Note** — a plain auto-growing text page (`body`).
-- **To-Do List** — checklist rows (`items[]` with `done`), tap to complete.
+- **Blank Note** — a **rich-text** page (`body` stores HTML). Editor is
+  `app/components/RichEditor.tsx` (contentEditable + `document.execCommand`, no
+  external libs). Supports: **Title/Heading/Subheading/Body** blocks (H1/H2/H3/P),
+  **bold/italic/underline/strikethrough**, **auto-bullets** when a line starts with
+  `- `, **Tab / Shift+Tab** to indent/outdent (sub-bullets), **hyperlinks**
+  (Cmd/Ctrl-click a link to open it), and **collapsible headings** — click a
+  heading's ▾ gutter chevron to hide everything under it until the next
+  same-or-higher heading (state saved via `data-collapsed`). Styling for headings,
+  chevrons, lists, links, and the placeholder lives in `globals.css` under
+  `.rich-editor`.
+- **To-Do List** — checklist rows (`items[]` with `done`), tap to complete. Each row
+  can carry an optional **due date** (stored in `item.date`); the row shows a colored
+  Overdue / Due today / Due in Nd chip.
 - **Grocery List** — checklist grouped by aisle/category (`items[]` with `category` from `GROCERY_CATEGORIES`).
 - **Project Timeline** — milestone rows with a target `date` and done state.
 - **Meal Plan** — weekly grid, 7 days × Breakfast/Lunch/Dinner (`items[]` keyed by `day` + `slot`).
 
-Every structured note also has a freeform **Notes** field (`body`) at the bottom.
+Every structured note also has a freeform **Notes** field (`body`) at the bottom
+(plain textarea; only Blank notes use the rich editor for `body`).
+
+### Due dates
+`item.date` (yyyy-mm-dd) is a **due date** on To-Do items and a **milestone date**
+on Timeline items. `dueInfo(date, done)` in `lib/notes.ts` classifies it as
+`overdue | today | soon (≤3d) | later` with a label; the note cards and the AIO
+dashboard both use it. New notes suggest **existing folder names** via a `<datalist>`
+on the folder input in the editor (`ownedNotesQuery` gathers the user's folders).
 
 ## Pages / routes
 ```
@@ -131,6 +150,10 @@ In `finance-dashboard`:
   that constant AND the `frame-ancestors` host stays `aio-actp.vercel.app` in
   `Notes App/next.config.ts`.**
 - The old `app/projects/page.tsx` is left in place (unlinked) so no data is lost.
+- **Due dates on the dashboard** — the AIO home (`app/page.tsx`) subscribes to the
+  signed-in user's notes (owned + shared) and scans To-Do + Timeline items for dates
+  that are overdue or within 3 days (not done). It shows a count on the **Notes tile**
+  (e.g. "2 due", red if any overdue) and a "N notes due" chip in **Today at a glance**.
 
 ## Design system — NotesShell
 Tokens in the `N` object; accent is the CSS var `--na` (default Violet `#8a7ad8`).
@@ -179,6 +202,11 @@ the setup steps in the chat / README.)
 - Debounced autosave with idle remote-sync.
 - Accent theming; Liquid Glass design system ported from FitShell.
 - AIO integration: Projects tile → Notes, `/notes` iframe route + token.
+
+### Added later
+- **Rich-text Blank notes** (headings, B/I/U/S, auto-bullets, indent, links, collapsible headings).
+- **Folder suggestions** (datalist of existing folders) in the note editor.
+- **Due dates** on To-Do items; due dates + Timeline milestones surfaced on the AIO dashboard.
 
 ### Not yet done / ideas
 - Deploy to Vercel (needs GitHub repo + Vercel project; URL confirm).

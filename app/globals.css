@@ -130,6 +130,38 @@ input.input-lg, textarea.input-lg { font-size: 26px !important; }
 .lg-press { transition: transform 0.13s cubic-bezier(0.4,0,0.2,1); }
 .lg-press:active { transform: scale(0.96); }
 
+/* ════════════════════════════════════════════════════════════════════════════
+   RICH EDITOR  —  contentEditable blank-note editor (see RichEditor.tsx)
+   ════════════════════════════════════════════════════════════════════════════ */
+.rich-editor:empty::before,
+.rich-editor[data-empty="true"]::before { content: attr(data-placeholder); color: rgba(255,255,255,0.30); pointer-events: none; }
+.rich-editor:focus:empty::before { content: attr(data-placeholder); }
+
+.rich-editor h1, .rich-editor h2, .rich-editor h3 {
+  position: relative; padding-left: 22px; margin: 0.7em 0 0.3em;
+  line-height: 1.25;
+}
+.rich-editor h1 { font-family: "Bebas Neue", sans-serif; font-size: 30px; letter-spacing: 0.02em; font-weight: 400; }
+.rich-editor h2 { font-size: 21px; font-weight: 700; }
+.rich-editor h3 { font-size: 16px; font-weight: 600; color: rgba(255,255,255,0.85); }
+
+/* Collapse chevron in the heading gutter */
+.rich-editor h1::before, .rich-editor h2::before, .rich-editor h3::before {
+  content: '▾'; position: absolute; left: 2px; top: 0.15em;
+  font-size: 0.7em; color: rgba(255,255,255,0.4); cursor: pointer;
+  transition: transform 0.15s ease;
+}
+.rich-editor h1[data-collapsed="true"]::before,
+.rich-editor h2[data-collapsed="true"]::before,
+.rich-editor h3[data-collapsed="true"]::before { content: '▸'; }
+
+.rich-editor p { margin: 0.4em 0; }
+.rich-editor ul { margin: 0.4em 0; padding-left: 1.4em; }
+.rich-editor ul ul { margin: 0.1em 0; }
+.rich-editor li { margin: 0.15em 0; }
+.rich-editor a { color: var(--na); text-decoration: underline; text-underline-offset: 2px; cursor: pointer; }
+.rich-editor:focus { outline: none; }
+
 @media (prefers-reduced-motion: reduce) {
   .liquid-glass,
   .liquid-glass.lg-interactive:active,

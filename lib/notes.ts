@@ -113,6 +113,23 @@ export function itemId(): string {
   return Math.random().toString(36).slice(2, 10) + Date.now().toString(36).slice(-4)
 }
 
+export type DueLevel = 'overdue' | 'today' | 'soon' | 'later'
+
+/** Interpret an item's date (yyyy-mm-dd) as a due date relative to today.
+ *  Returns null when there's no date or the item is done. */
+export function dueInfo(date?: string, done?: boolean): { level: DueLevel; days: number; label: string } | null {
+  if (!date || done) return null
+  const [y, m, d] = date.split('-').map(Number)
+  if (!y || !m || !d) return null
+  const due = new Date(y, m - 1, d); due.setHours(0, 0, 0, 0)
+  const today = new Date(); today.setHours(0, 0, 0, 0)
+  const days = Math.round((due.getTime() - today.getTime()) / 86400000)
+  if (days < 0)   return { level: 'overdue', days, label: days === -1 ? 'Overdue 1d' : `Overdue ${-days}d` }
+  if (days === 0) return { level: 'today',   days, label: 'Due today' }
+  if (days <= 3)  return { level: 'soon',    days, label: `Due in ${days}d` }
+  return { level: 'later', days, label: due.toLocaleDateString(undefined, { month: 'short', day: 'numeric' }) }
+}
+
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
 export function isValidEmail(s: string): boolean {
   return EMAIL_RE.test(s.trim())
@@ -135,7 +152,8 @@ export function noteSummary(n: Note): string {
     case 'meal':
       return n.items.length ? `${n.items.filter(i => i.text.trim()).length} meals planned` : 'Meal plan'
     default: {
-      const text = n.body.trim()
+      // strip HTML tags for a clean one-line preview of a rich blank note
+      const text = n.body.replace(/<[^>]*>/g, ' ').replace(/&nbsp;/g, ' ').replace(/\s+/g, ' ').trim()
       return text ? text.slice(0, 80) : 'Empty note'
     }
   }

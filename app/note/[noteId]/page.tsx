@@ -6,9 +6,10 @@ import { db } from '@/lib/firebase'
 import { useUser } from '../../components/AuthGate'
 import { NotePage, N, noteA, PillBtn } from '../../components/NotesShell'
 import { useModalLock } from '@/lib/useModalLock'
+import { RichEditor } from '../../components/RichEditor'
 import {
-  updateNote, deleteNote, shareNote, unshareNote,
-  itemId, isValidEmail, type Note, type NoteItem,
+  updateNote, deleteNote, shareNote, unshareNote, ownedNotesQuery,
+  itemId, isValidEmail, dueInfo, type Note, type NoteItem, type DueLevel,
 } from '@/lib/notes'
 import { templateByType, GROCERY_CATEGORIES, WEEKDAYS, MEAL_SLOTS } from '@/lib/templates'
 
@@ -31,6 +32,7 @@ export default function NoteEditorPage({ params }: { params: Promise<{ noteId: s
   const [save, setSave]         = useState<SaveState>('idle')
   const [shareOpen, setShareOpen] = useState(false)
   const [confirmDel, setConfirmDel] = useState(false)
+  const [folders, setFolders]   = useState<string[]>([])
 
   const hydrated  = useRef(false)
   const lastEdit  = useRef(0)
@@ -58,6 +60,17 @@ export default function NoteEditorPage({ params }: { params: Promise<{ noteId: s
   }, [noteId])
 
   useEffect(() => () => { if (saveTimer.current) clearTimeout(saveTimer.current) }, [])
+
+  // Existing folder names → suggestions for the folder input
+  useEffect(() => {
+    if (!user) return
+    const unsub = onSnapshot(ownedNotesQuery(user.uid), snap => {
+      const set = new Set<string>()
+      snap.docs.forEach(d => { const f = ((d.data().folder as string) || '').trim(); if (f) set.add(f) })
+      setFolders(Array.from(set).sort())
+    }, () => { /* ignore */ })
+    return unsub
+  }, [user?.uid])
 
   // ── Local edit + debounced save ───────────────────────────────────────────────
   function patchNote(patch: Partial<Note>) {
@@ -174,8 +187,12 @@ export default function NoteEditorPage({ params }: { params: Promise<{ noteId: s
               value={note.folder}
               onChange={e => patchNote({ folder: e.target.value })}
               placeholder="No folder"
+              list="folder-suggestions"
               style={{ background: 'transparent', border: 'none', outline: 'none', color: N.textSec, fontSize: 13, fontFamily: N.font, width: '100%' }}
             />
+            <datalist id="folder-suggestions">
+              {folders.map(f => <option key={f} value={f} />)}
+            </datalist>
           </div>
           <span style={{ fontSize: 9, letterSpacing: '0.14em', textTransform: 'uppercase', fontWeight: 700, color: tpl.accent, background: `color-mix(in srgb, ${tpl.accent} 14%, transparent)`, borderRadius: 20, padding: '4px 10px' }}>
             {tpl.name}
@@ -183,7 +200,7 @@ export default function NoteEditorPage({ params }: { params: Promise<{ noteId: s
         </div>
 
         {/* Type-specific editor */}
-        {note.type === 'blank'    && <BlankEditor note={note} onBody={b => patchNote({ body: b })} />}
+        {note.type === 'blank'    && <RichEditor value={note.body} onChange={b => patchNote({ body: b })} />}
         {note.type === 'todo'     && <ChecklistEditor note={note} onUpdate={updateItem} onRemove={removeItem} onAdd={() => addItem({ done: false })} />}
         {note.type === 'grocery'  && <GroceryEditor note={note} onUpdate={updateItem} onRemove={removeItem} onAdd={cat => addItem({ done: false, category: cat })} />}
         {note.type === 'timeline' && <TimelineEditor note={note} onUpdate={updateItem} onRemove={removeItem} onAdd={() => addItem({ done: false, date: '' })} />}
@@ -238,11 +255,6 @@ function AutoTextarea({ value, onChange, placeholder, minHeight = 200 }: {
   )
 }
 
-// ─── Blank ────────────────────────────────────────────────────────────────────
-function BlankEditor({ note, onBody }: { note: Note; onBody: (b: string) => void }) {
-  return <AutoTextarea value={note.body} onChange={onBody} placeholder="Start writing…" minHeight={280} />
-}
-
 // ─── Checkbox ─────────────────────────────────────────────────────────────────
 function Check({ on, onClick, color }: { on: boolean; onClick: () => void; color: string }) {
   return (
@@ -277,23 +289,57 @@ function AddRowBtn({ label, onClick }: { label: string; onClick: () => void }) {
   )
 }
 
+// ─── Due-date control (To-Do rows) ────────────────────────────────────────────
+const DUE_COLOR: Record<DueLevel, string> = {
+  overdue: N.warn, today: '#f0b429', soon: '#f0b429', later: N.textSec,
+}
+function DueControl({ value, done, onChange }: { value?: string; done?: boolean; onChange: (d: string) => void }) {
+  const info = dueInfo(value, done)
+  const coverInput: React.CSSProperties = { position: 'absolute', inset: 0, opacity: 0, cursor: 'pointer' }
+  if (!value) {
+    return (
+      <label style={{ position: 'relative', display: 'inline-flex', alignItems: 'center', gap: 6, cursor: 'pointer', color: N.textMut, fontSize: 12 }}>
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></svg>
+        Add due date
+        <input type="date" value="" onChange={e => onChange(e.target.value)} style={coverInput} />
+      </label>
+    )
+  }
+  const color = info ? DUE_COLOR[info.level] : N.textMut
+  return (
+    <div style={{ display: 'inline-flex', alignItems: 'center', gap: 8 }}>
+      <label style={{ position: 'relative', display: 'inline-flex', alignItems: 'center', gap: 5, color, fontSize: 12, cursor: 'pointer' }}>
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></svg>
+        <span style={{ fontWeight: 600 }}>{info ? info.label : 'Done'}</span>
+        <input type="date" value={value} onChange={e => onChange(e.target.value)} style={coverInput} />
+      </label>
+      <button onClick={() => onChange('')} aria-label="Clear due date" style={{ background: 'none', border: 'none', color: N.textDim, cursor: 'pointer', fontSize: 12, padding: 0, lineHeight: 1 }}>✕</button>
+    </div>
+  )
+}
+
 // ─── To-Do checklist ──────────────────────────────────────────────────────────
 function ChecklistEditor({ note, onUpdate, onRemove, onAdd }: {
   note: Note; onUpdate: (id: string, p: Partial<NoteItem>) => void; onRemove: (id: string) => void; onAdd: () => void
 }) {
   const accent = templateByType('todo').accent
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
       {note.items.map(it => (
-        <div key={it.id} style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-          <Check on={!!it.done} color={accent} onClick={() => onUpdate(it.id, { done: !it.done })} />
-          <input
-            value={it.text}
-            onChange={e => onUpdate(it.id, { text: e.target.value })}
-            placeholder="List item"
-            style={{ ...inputSx, textDecoration: it.done ? 'line-through' : 'none', color: it.done ? N.textMut : N.text }}
-          />
-          <RowDelete onClick={() => onRemove(it.id)} />
+        <div key={it.id} style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+            <Check on={!!it.done} color={accent} onClick={() => onUpdate(it.id, { done: !it.done })} />
+            <input
+              value={it.text}
+              onChange={e => onUpdate(it.id, { text: e.target.value })}
+              placeholder="List item"
+              style={{ ...inputSx, textDecoration: it.done ? 'line-through' : 'none', color: it.done ? N.textMut : N.text }}
+            />
+            <RowDelete onClick={() => onRemove(it.id)} />
+          </div>
+          <div style={{ paddingLeft: 32, position: 'relative' }}>
+            <DueControl value={it.date} done={it.done} onChange={d => onUpdate(it.id, { date: d })} />
+          </div>
         </div>
       ))}
       <AddRowBtn label="Add item" onClick={onAdd} />
