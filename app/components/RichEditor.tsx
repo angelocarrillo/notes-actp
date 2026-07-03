@@ -33,6 +33,10 @@ export function RichEditor({ value, onChange }: { value: string; onChange: (html
   const [barOpen, setBarOpen] = useState(true)
   const pillRef = useRef<HTMLDivElement | null>(null)
   const [pillTop, setPillTop] = useState<number | null>(null)
+  // Keyboard height reported by the AIO parent (via postMessage) when this app is
+  // embedded in the AIO iframe — inside a cross-origin iframe the VisualViewport
+  // API does NOT reflect the on-screen keyboard, so we rely on the parent.
+  const parentKb = useRef<number | null>(null)
 
   useEffect(() => {
     try { const s = localStorage.getItem('notes_fmtbar_open'); if (s === '0') setBarOpen(false) } catch { /* ignore */ }
@@ -51,26 +55,49 @@ export function RichEditor({ value, onChange }: { value: string; onChange: (html
       const el = pillRef.current
       if (!el) return
       const vv = window.visualViewport
-      const h  = el.offsetHeight
-      const viewBottom = vv ? vv.offsetTop + vv.height : window.innerHeight
-      const kbOpen = vv ? (window.innerHeight - vv.height - vv.offsetTop) > 100 : false
-      const margin = kbOpen ? 8 : 18
-      setPillTop(Math.max(8, viewBottom - h - margin))
+      const inIframe = window.self !== window.top
+      let visibleBottom: number, kbForMargin: number
+      if (inIframe && parentKb.current != null) {
+        // In the AIO iframe: our own VisualViewport doesn't shrink for the
+        // keyboard, so subtract the keyboard height the parent gave us.
+        const full = vv ? vv.height : window.innerHeight
+        visibleBottom = full - parentKb.current
+        kbForMargin   = parentKb.current
+      } else if (vv) {
+        visibleBottom = vv.offsetTop + vv.height
+        kbForMargin   = Math.max(0, window.innerHeight - vv.height - vv.offsetTop)
+      } else {
+        visibleBottom = window.innerHeight
+        kbForMargin   = 0
+      }
+      const margin = kbForMargin > 100 ? 8 : 18
+      setPillTop(Math.max(8, visibleBottom - el.offsetHeight - margin))
+    }
+    // rAF-throttle so scroll/resize repositioning tracks instantly without piling up
+    let ticking = false
+    const schedule = () => { if (!ticking) { ticking = true; requestAnimationFrame(() => { ticking = false; place() }) } }
+    const onMsg = (e: MessageEvent) => {
+      if (e.data && e.data.type === 'aio-kb' && typeof e.data.kb === 'number') {
+        parentKb.current = e.data.kb
+        schedule()
+      }
     }
     place()
     const vv = window.visualViewport
-    vv?.addEventListener('resize', place)
-    vv?.addEventListener('scroll', place)
-    window.addEventListener('scroll', place, { passive: true })
-    window.addEventListener('resize', place)
-    const ro = pillRef.current ? new ResizeObserver(place) : null
+    vv?.addEventListener('resize', schedule)
+    vv?.addEventListener('scroll', schedule)
+    window.addEventListener('scroll', schedule, { passive: true, capture: true })
+    window.addEventListener('resize', schedule)
+    window.addEventListener('message', onMsg)
+    const ro = pillRef.current ? new ResizeObserver(schedule) : null
     if (ro && pillRef.current) ro.observe(pillRef.current)
     const raf = requestAnimationFrame(place)
     return () => {
-      vv?.removeEventListener('resize', place)
-      vv?.removeEventListener('scroll', place)
-      window.removeEventListener('scroll', place)
-      window.removeEventListener('resize', place)
+      vv?.removeEventListener('resize', schedule)
+      vv?.removeEventListener('scroll', schedule)
+      window.removeEventListener('scroll', schedule, { capture: true } as EventListenerOptions)
+      window.removeEventListener('resize', schedule)
+      window.removeEventListener('message', onMsg)
       ro?.disconnect()
       cancelAnimationFrame(raf)
     }
@@ -219,7 +246,7 @@ export function RichEditor({ value, onChange }: { value: string; onChange: (html
           transform: 'translateX(-50%)',
           zIndex: 60,
           width: barOpen ? 'min(440px, calc(100vw - 12px))' : 'auto',
-          transition: 'top 0.15s ease',
+          willChange: 'top',
         }}
       >
         {barOpen ? (

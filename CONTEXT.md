@@ -37,7 +37,11 @@ view AND edit.** It replaces the **Projects** card in the AIO dashboard.
   full-width rows (space-between, so it reads the same on mobile and desktop). It is
   **pinned to the bottom of the visual viewport** — `pillRef.offsetHeight` +
   VisualViewport `offsetTop/height` + a `ResizeObserver` compute `pillTop` so it is
-  *always* just above the on-screen keyboard, never behind it. It can be **tucked
+  *always* just above the on-screen keyboard, never behind it. Repositioning is
+  rAF-throttled with **no CSS transition** so it tracks scrolling instantly (no lag).
+  **Inside the AIO iframe** the VisualViewport API can't see the keyboard, so the AIO
+  `/notes` page measures it and `postMessage`s `{type:'aio-kb', kb}` into the iframe;
+  the editor listens for that and uses `parentKb` to stay above the keyboard. It can be **tucked
   away** to an "Aa" chip (persisted in `localStorage['notes_fmtbar_open']`) with a
   grow/shrink animation (`.pill-pop` in `globals.css`). Row 1 also has a **break-out**
   button (`detachBlock`) that toggles `data-detached` on the caret's block so a body
