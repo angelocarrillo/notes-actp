@@ -1,0 +1,138 @@
+@import url('https://fonts.googleapis.com/css2?family=Bebas+Neue&family=DM+Sans:wght@400;500;600&family=DM+Mono:wght@400;500&display=swap');
+
+/* ── Accent color theme — updated by settings/page.tsx via applyAccent() ────── */
+:root { --na: #8a7ad8; }
+
+*, *::before, *::after { box-sizing: border-box; }
+
+html, body {
+  margin: 0;
+  padding: 0;
+  background: #0a0a0c;
+  color: #f2f2f4;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+a { text-decoration: none; color: inherit; }
+button { -webkit-tap-highlight-color: transparent; }
+
+/* ── Prevent iOS auto-zoom on input focus ────────────────────────────────────
+   Mobile Safari zooms the page whenever you focus a form control whose
+   font-size is < 16px. Force every control to 16px (overriding inline styles).
+   `.input-lg` opts intentionally large inputs (e.g. the note title) back out.
+   Combined with the viewport `maximum-scale=1, user-scalable=no` in layout.tsx,
+   the app never zooms. */
+html { -webkit-text-size-adjust: 100%; text-size-adjust: 100%; }
+input, select, textarea { font-size: 16px !important; }
+input.input-lg, textarea.input-lg { font-size: 26px !important; }
+
+/* ════════════════════════════════════════════════════════════════════════════
+   LIQUID GLASS  —  Apple iOS 26 "Liquid Glass" material, translated to the web.
+   A translucent material that blurs + saturates what's behind it, carries a
+   specular top edge + gradient rim light, refracts at the edges, and reacts to
+   pointer / press in real time. Applied via the .liquid-glass class so the
+   pseudo-element sheens (rim + lensing) and interactive states work everywhere.
+   ════════════════════════════════════════════════════════════════════════════ */
+
+@property --lg-mx { syntax: '<percentage>'; inherits: false; initial-value: 50%; }
+@property --lg-my { syntax: '<percentage>'; inherits: false; initial-value: 0%; }
+
+.liquid-glass {
+  --lg-accent: transparent;
+  position: relative;
+  isolation: isolate;
+  background:
+    linear-gradient(177deg,
+      rgba(255,255,255,0.14) 0%,
+      rgba(255,255,255,0.055) 34%,
+      rgba(255,255,255,0.03) 100%);
+  backdrop-filter: blur(28px) saturate(185%) brightness(1.08);
+  -webkit-backdrop-filter: blur(28px) saturate(185%) brightness(1.08);
+  box-shadow:
+    inset 0 1px 0.5px rgba(255,255,255,0.55),
+    inset 0 -12px 24px -16px rgba(255,255,255,0.14),
+    0 10px 30px -10px rgba(0,0,0,0.55),
+    0 1px 2px rgba(0,0,0,0.28),
+    0 0 36px -4px var(--lg-accent);
+  transition:
+    transform 0.5s cubic-bezier(0.34,1.56,0.64,1),
+    box-shadow 0.4s ease;
+}
+
+.liquid-glass::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  padding: 1px;
+  background: linear-gradient(135deg,
+    rgba(255,255,255,0.7) 0%,
+    rgba(255,255,255,0.12) 20%,
+    rgba(255,255,255,0) 48%,
+    rgba(255,255,255,0.08) 74%,
+    rgba(255,255,255,0.45) 100%);
+  -webkit-mask:
+    linear-gradient(#000 0 0) content-box,
+    linear-gradient(#000 0 0);
+  -webkit-mask-composite: xor;
+          mask:
+    linear-gradient(#000 0 0) content-box,
+    linear-gradient(#000 0 0);
+          mask-composite: exclude;
+  pointer-events: none;
+  z-index: -1;
+}
+
+.liquid-glass::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  background: radial-gradient(140px 140px at var(--lg-mx) var(--lg-my),
+    rgba(255,255,255,0.20),
+    rgba(255,255,255,0.06) 42%,
+    rgba(255,255,255,0) 68%);
+  opacity: 0;
+  transition: opacity 0.45s ease;
+  pointer-events: none;
+  z-index: -1;
+}
+
+.liquid-glass.lg-interactive { cursor: pointer; }
+
+@media (hover: hover) {
+  .liquid-glass.lg-interactive:hover::after { opacity: 1; }
+  .liquid-glass.lg-interactive:hover {
+    box-shadow:
+      inset 0 1px 0.5px rgba(255,255,255,0.75),
+      inset 0 -12px 24px -16px rgba(255,255,255,0.18),
+      0 16px 40px -10px rgba(0,0,0,0.6),
+      0 1px 2px rgba(0,0,0,0.28),
+      0 0 48px -2px var(--lg-accent);
+  }
+}
+
+.liquid-glass.lg-interactive:active {
+  transform: scale(0.974);
+  transition: transform 0.13s cubic-bezier(0.4,0,0.2,1);
+}
+.liquid-glass.lg-interactive:active::after { opacity: 1; }
+
+@keyframes lgSheen {
+  0%   { --lg-mx: 18%; --lg-my: -8%; }
+  50%  { --lg-mx: 82%; --lg-my: 16%; }
+  100% { --lg-mx: 18%; --lg-my: -8%; }
+}
+.liquid-glass.lg-sheen::after { opacity: 0.7; animation: lgSheen 9s ease-in-out infinite; }
+
+/* Generic press feedback for opaque (accent) buttons */
+.lg-press { transition: transform 0.13s cubic-bezier(0.4,0,0.2,1); }
+.lg-press:active { transform: scale(0.96); }
+
+@media (prefers-reduced-motion: reduce) {
+  .liquid-glass,
+  .liquid-glass.lg-interactive:active,
+  .lg-press, .lg-press:active { transition: none; transform: none; }
+  .liquid-glass.lg-sheen::after { animation: none; }
+}
