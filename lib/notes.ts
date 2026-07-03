@@ -1,5 +1,5 @@
 import {
-  collection, query, where, orderBy, doc,
+  collection, query, where, doc,
   addDoc, updateDoc, deleteDoc, serverTimestamp,
   arrayUnion, arrayRemove, type Timestamp, type Query, type DocumentData,
 } from 'firebase/firestore'
@@ -40,18 +40,27 @@ export type NewNote = Pick<Note, 'title' | 'type' | 'folder' | 'body' | 'items'>
 
 export const notesCol = collection(db, 'notes')
 
-/** Notes I own, newest first. */
+// NOTE: these queries deliberately use only a single `where` and NO `orderBy`.
+// Combining `where` + `orderBy('updatedAt')` would require a manually-created
+// Firestore composite index; without it the query fails and returns nothing.
+// We sort client-side instead (see sortByUpdated / the Home + Shared pages).
+
+/** Notes I own (unsorted — sort client-side with sortByUpdated). */
 export function ownedNotesQuery(uid: string): Query<DocumentData> {
-  return query(notesCol, where('ownerId', '==', uid), orderBy('updatedAt', 'desc'))
+  return query(notesCol, where('ownerId', '==', uid))
 }
 
-/** Notes shared with me (by email), newest first. */
+/** Notes shared with me by email (unsorted — sort client-side). */
 export function sharedNotesQuery(email: string): Query<DocumentData> {
-  return query(
-    notesCol,
-    where('sharedWith', 'array-contains', email.toLowerCase()),
-    orderBy('updatedAt', 'desc'),
-  )
+  return query(notesCol, where('sharedWith', 'array-contains', email.toLowerCase()))
+}
+
+/** Sort notes newest-first by updatedAt. A pending serverTimestamp (null,
+ *  just-created) sorts to the top. */
+export function sortByUpdated(notes: Note[]): Note[] {
+  const ms = (t?: Timestamp | null) =>
+    t && typeof (t as Timestamp).toMillis === 'function' ? (t as Timestamp).toMillis() : Number.POSITIVE_INFINITY
+  return [...notes].sort((a, b) => ms(b.updatedAt) - ms(a.updatedAt))
 }
 
 // ─── Mutations ────────────────────────────────────────────────────────────────

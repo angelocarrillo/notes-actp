@@ -5,7 +5,7 @@ import { onSnapshot } from 'firebase/firestore'
 import { useUser } from '../components/AuthGate'
 import { NotePage, PageHead, SectionLbl, N } from '../components/NotesShell'
 import { NoteCard } from '../components/NoteCard'
-import { sharedNotesQuery, type Note } from '@/lib/notes'
+import { sharedNotesQuery, sortByUpdated, type Note } from '@/lib/notes'
 
 export default function SharedPage() {
   const user   = useUser()
@@ -16,9 +16,9 @@ export default function SharedPage() {
   useEffect(() => {
     if (!user?.email) { setLoading(false); return }
     const unsub = onSnapshot(sharedNotesQuery(user.email), snap => {
-      setNotes(snap.docs.map(d => ({ id: d.id, ...d.data() }) as Note))
+      setNotes(sortByUpdated(snap.docs.map(d => ({ id: d.id, ...d.data() }) as Note)))
       setLoading(false)
-    }, () => setLoading(false))
+    }, err => { console.error('Shared notes query failed:', err); setLoading(false) })
     return unsub
   }, [user?.email])
 

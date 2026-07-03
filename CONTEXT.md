@@ -69,9 +69,13 @@ NoteItem = {
 }
 ```
 
-Queries (`lib/notes.ts`):
-- **Mine**: `where('ownerId','==',uid) orderBy('updatedAt','desc')`
-- **Shared with me**: `where('sharedWith','array-contains', myEmail) orderBy('updatedAt','desc')`
+Queries (`lib/notes.ts`) — **single `where`, no `orderBy`**, then sorted
+client-side via `sortByUpdated`. (A `where` + `orderBy('updatedAt')` combo needs a
+manually-created Firestore composite index; without it the query fails and returns
+nothing — which made the list look empty on every refresh. Sorting in JS avoids the
+index entirely.)
+- **Mine**: `where('ownerId','==',uid)`
+- **Shared with me**: `where('sharedWith','array-contains', myEmail)`
 
 ### Sharing
 `shareNote(id, email)` adds a lowercased email to `sharedWith` (`arrayUnion`);

@@ -5,7 +5,7 @@ import { onSnapshot } from 'firebase/firestore'
 import { useUser } from './components/AuthGate'
 import { NotePage, PageHead, AddBtn, SectionLbl, N, noteA } from './components/NotesShell'
 import { NoteCard } from './components/NoteCard'
-import { ownedNotesQuery, type Note } from '@/lib/notes'
+import { ownedNotesQuery, sortByUpdated, type Note } from '@/lib/notes'
 
 export default function HomePage() {
   const user   = useUser()
@@ -17,9 +17,9 @@ export default function HomePage() {
   useEffect(() => {
     if (!user) return
     const unsub = onSnapshot(ownedNotesQuery(user.uid), snap => {
-      setNotes(snap.docs.map(d => ({ id: d.id, ...d.data() }) as Note))
+      setNotes(sortByUpdated(snap.docs.map(d => ({ id: d.id, ...d.data() }) as Note)))
       setLoading(false)
-    }, () => setLoading(false))
+    }, err => { console.error('Notes query failed:', err); setLoading(false) })
     return unsub
   }, [user?.uid])
 
