@@ -98,42 +98,60 @@ export function RichEditor({ value, onChange }: { value: string; onChange: (html
     }
   }
 
+  // Tap a link to open it (works on mobile — no modifier key needed).
   const onClick = (e: React.MouseEvent<HTMLDivElement>) => {
     const a = (e.target as HTMLElement).closest('a') as HTMLAnchorElement | null
-    if (a && (e.metaKey || e.ctrlKey)) { e.preventDefault(); window.open(a.href, '_blank', 'noopener') }
+    if (a && a.getAttribute('href')) { e.preventDefault(); window.open(a.href, '_blank', 'noopener') }
+  }
+
+  // Paste as plain text so pasted content inherits this note's font/color/size
+  // instead of carrying over the source app's styling (Apple Notes, web pages…).
+  const onPaste = (e: React.ClipboardEvent<HTMLDivElement>) => {
+    e.preventDefault()
+    const text = e.clipboardData.getData('text/plain')
+    // Insert line by line so newlines become new blocks/breaks, not lost.
+    const lines = text.split(/\r?\n/)
+    lines.forEach((line, i) => {
+      if (i > 0) document.execCommand('insertParagraph')
+      if (line) document.execCommand('insertText', false, line)
+    })
+    emit()
   }
 
   return (
     <div>
-      {/* Toolbar */}
+      {/* Toolbar — row 1: block styles, row 2: inline formatting */}
       <div style={{
         position: 'sticky', top: 'calc(env(safe-area-inset-top) + 54px)', zIndex: 15,
-        display: 'flex', flexWrap: 'wrap', gap: 6, padding: '8px', marginBottom: 10,
+        display: 'flex', flexDirection: 'column', gap: 6, padding: '8px', marginBottom: 10,
         background: 'rgba(19,19,24,0.92)', backdropFilter: 'blur(12px)', WebkitBackdropFilter: 'blur(12px)',
         border: `1px solid ${N.border}`, borderRadius: 12,
       }}>
-        <Btn onClick={() => setBlock('H1')} title="Title"><span style={{ fontFamily: N.bebas, fontSize: 17 }}>Title</span></Btn>
-        <Btn onClick={() => setBlock('H2')} title="Heading"><span style={{ fontWeight: 700, fontSize: 15 }}>Heading</span></Btn>
-        <Btn onClick={() => setBlock('H3')} title="Subheading"><span style={{ fontWeight: 600, fontSize: 13 }}>Subhead</span></Btn>
-        <Btn onClick={() => setBlock('P')} title="Body"><span style={{ fontSize: 13 }}>Body</span></Btn>
-        <Sep />
-        <Btn onClick={() => exec('bold')} title="Bold"><b>B</b></Btn>
-        <Btn onClick={() => exec('italic')} title="Italic"><i>I</i></Btn>
-        <Btn onClick={() => exec('underline')} title="Underline"><u>U</u></Btn>
-        <Btn onClick={() => exec('strikeThrough')} title="Strikethrough"><s>S</s></Btn>
-        <Sep />
-        <Btn onClick={() => exec('insertUnorderedList')} title="Bullet list">
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01"/></svg>
-        </Btn>
-        <Btn onClick={() => exec('outdent')} title="Outdent">
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 6H8M21 12H12M21 18H8M6 9l-3 3 3 3"/></svg>
-        </Btn>
-        <Btn onClick={() => exec('indent')} title="Indent (sub-bullet)">
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 6H8M21 12h-9M21 18H8M3 9l3 3-3 3"/></svg>
-        </Btn>
-        <Btn onClick={addLink} title="Add link">
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M10 13a5 5 0 0 0 7 0l3-3a5 5 0 0 0-7-7l-1 1M14 11a5 5 0 0 0-7 0l-3 3a5 5 0 0 0 7 7l1-1"/></svg>
-        </Btn>
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+          <Btn onClick={() => setBlock('H1')} title="Title"><span style={{ fontFamily: N.bebas, fontSize: 17 }}>Title</span></Btn>
+          <Btn onClick={() => setBlock('H2')} title="Heading"><span style={{ fontWeight: 700, fontSize: 15 }}>Heading</span></Btn>
+          <Btn onClick={() => setBlock('H3')} title="Subheading"><span style={{ fontWeight: 600, fontSize: 13 }}>Subhead</span></Btn>
+          <Btn onClick={() => setBlock('P')} title="Body"><span style={{ fontSize: 13 }}>Body</span></Btn>
+        </div>
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, alignItems: 'stretch' }}>
+          <Btn onClick={() => exec('bold')} title="Bold"><b>B</b></Btn>
+          <Btn onClick={() => exec('italic')} title="Italic"><i>I</i></Btn>
+          <Btn onClick={() => exec('underline')} title="Underline"><u>U</u></Btn>
+          <Btn onClick={() => exec('strikeThrough')} title="Strikethrough"><s>S</s></Btn>
+          <Sep />
+          <Btn onClick={() => exec('insertUnorderedList')} title="Bullet list">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01"/></svg>
+          </Btn>
+          <Btn onClick={() => exec('outdent')} title="Outdent">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 6H8M21 12H12M21 18H8M6 9l-3 3 3 3"/></svg>
+          </Btn>
+          <Btn onClick={() => exec('indent')} title="Indent (sub-bullet)">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 6H8M21 12h-9M21 18H8M3 9l3 3-3 3"/></svg>
+          </Btn>
+          <Btn onClick={addLink} title="Add link">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M10 13a5 5 0 0 0 7 0l3-3a5 5 0 0 0-7-7l-1 1M14 11a5 5 0 0 0-7 0l-3 3a5 5 0 0 0 7 7l1-1"/></svg>
+          </Btn>
+        </div>
       </div>
 
       <div
@@ -145,6 +163,7 @@ export function RichEditor({ value, onChange }: { value: string; onChange: (html
         onKeyDown={onKeyDown}
         onMouseDown={onMouseDown}
         onClick={onClick}
+        onPaste={onPaste}
         onFocus={() => { focused.current = true }}
         onBlur={() => { focused.current = false; emit() }}
         data-placeholder="Start writing…  (type “- ” for a bullet, tap a heading’s ▸ to collapse)"
