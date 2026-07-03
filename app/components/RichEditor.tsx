@@ -18,7 +18,8 @@ function applyCollapse(root: HTMLElement) {
     const el  = child as HTMLElement
     const lvl = headingLevel(el)
     if (lvl > 0) while (stack.length && lvl <= stack[stack.length - 1]) stack.pop()
-    const hidden = stack.length > 0
+    // Blocks marked data-detached stay visible even inside a collapsed section.
+    const hidden = stack.length > 0 && el.dataset.detached !== 'true'
     el.style.display = hidden ? 'none' : ''
     if (lvl > 0 && !hidden && el.dataset.collapsed === 'true') stack.push(lvl)
   }
@@ -28,9 +29,10 @@ export function RichEditor({ value, onChange }: { value: string; onChange: (html
   const ref     = useRef<HTMLDivElement | null>(null)
   const focused = useRef(false)
 
-  // Floating formatting pill: open/tucked-away state (persisted) + keyboard inset.
+  // Floating formatting pill: open/tucked-away state (persisted) + position.
   const [barOpen, setBarOpen] = useState(true)
-  const [kbInset, setKbInset] = useState(0)
+  const pillRef = useRef<HTMLDivElement | null>(null)
+  const [pillTop, setPillTop] = useState<number | null>(null)
 
   useEffect(() => {
     try { const s = localStorage.getItem('notes_fmtbar_open'); if (s === '0') setBarOpen(false) } catch { /* ignore */ }
@@ -40,16 +42,39 @@ export function RichEditor({ value, onChange }: { value: string; onChange: (html
     try { localStorage.setItem('notes_fmtbar_open', open ? '1' : '0') } catch { /* ignore */ }
   }
 
-  // Keep the pill above the on-screen keyboard using the VisualViewport API.
+  // Pin the pill to the bottom of the *visual* viewport so it is ALWAYS just
+  // above the on-screen keyboard (and above the note when the keyboard is closed).
+  // Uses the VisualViewport API + a ResizeObserver so it tracks the keyboard,
+  // scrolling, and its own height (open vs. tucked-away) reliably.
   useEffect(() => {
+    const place = () => {
+      const el = pillRef.current
+      if (!el) return
+      const vv = window.visualViewport
+      const h  = el.offsetHeight
+      const viewBottom = vv ? vv.offsetTop + vv.height : window.innerHeight
+      const kbOpen = vv ? (window.innerHeight - vv.height - vv.offsetTop) > 100 : false
+      const margin = kbOpen ? 8 : 18
+      setPillTop(Math.max(8, viewBottom - h - margin))
+    }
+    place()
     const vv = window.visualViewport
-    if (!vv) return
-    const onVV = () => setKbInset(Math.max(0, window.innerHeight - vv.height - vv.offsetTop))
-    vv.addEventListener('resize', onVV)
-    vv.addEventListener('scroll', onVV)
-    onVV()
-    return () => { vv.removeEventListener('resize', onVV); vv.removeEventListener('scroll', onVV) }
-  }, [])
+    vv?.addEventListener('resize', place)
+    vv?.addEventListener('scroll', place)
+    window.addEventListener('scroll', place, { passive: true })
+    window.addEventListener('resize', place)
+    const ro = pillRef.current ? new ResizeObserver(place) : null
+    if (ro && pillRef.current) ro.observe(pillRef.current)
+    const raf = requestAnimationFrame(place)
+    return () => {
+      vv?.removeEventListener('resize', place)
+      vv?.removeEventListener('scroll', place)
+      window.removeEventListener('scroll', place)
+      window.removeEventListener('resize', place)
+      ro?.disconnect()
+      cancelAnimationFrame(raf)
+    }
+  }, [barOpen])
 
   // Initialize / sync innerHTML when not actively editing.
   useEffect(() => {
@@ -85,6 +110,22 @@ export function RichEditor({ value, onChange }: { value: string; onChange: (html
     if (!url) return
     const href = /^(https?:|mailto:)/i.test(url) ? url : 'https://' + url
     exec('createLink', href)
+  }
+
+  // Toggle whether the block at the caret is "detached" from its heading's
+  // collapse group (stays visible even when the heading above it is collapsed).
+  const detachBlock = () => {
+    const el = ref.current
+    if (!el) return
+    const sel = window.getSelection()
+    if (!sel || !sel.rangeCount) return
+    let node: Node | null = sel.getRangeAt(0).startContainer
+    while (node && node.parentElement !== el) node = node.parentElement
+    const block = node as HTMLElement | null
+    if (!block || block === el) return
+    block.dataset.detached = block.dataset.detached === 'true' ? 'false' : 'true'
+    applyCollapse(el)
+    emit()
   }
 
   const onKeyDown = (e: React.KeyboardEvent<HTMLDivElement>) => {
@@ -165,37 +206,47 @@ export function RichEditor({ value, onChange }: { value: string; onChange: (html
         } as React.CSSProperties}
       />
 
-      {/* Floating formatting pill — sits at the bottom, rides above the keyboard */}
+      {/* Floating formatting pill — pinned just above the keyboard (or bottom) */}
       <div
+        ref={pillRef}
         onMouseDown={e => e.preventDefault()}   /* don't blur the editor when tapping the bar */
         style={{
-          position: 'fixed', left: '50%', transform: 'translateX(-50%)',
-          bottom: kbInset > 0 ? kbInset + 10 : 'calc(env(safe-area-inset-bottom) + 14px)',
-          zIndex: 60, maxWidth: 'calc(100vw - 20px)',
-          transition: 'bottom 0.18s ease',
+          position: 'fixed',
+          left: '50%',
+          ...(pillTop != null
+            ? { top: pillTop, bottom: 'auto' }
+            : { bottom: 'calc(env(safe-area-inset-bottom) + 16px)' }),
+          transform: 'translateX(-50%)',
+          zIndex: 60,
+          width: barOpen ? 'min(440px, calc(100vw - 12px))' : 'auto',
+          transition: 'top 0.15s ease',
         }}
       >
         {barOpen ? (
-          <div style={{
-            display: 'flex', flexDirection: 'column', gap: 6, alignItems: 'center',
-            padding: '8px 10px',
-            background: 'linear-gradient(180deg, rgba(34,34,40,0.96) 0%, rgba(16,16,20,0.97) 100%)',
-            border: `1px solid ${N.borderHi}`, borderRadius: 20,
+          <div key="open" className="pill-pop" style={{
+            display: 'flex', flexDirection: 'column', gap: 8, width: '100%',
+            padding: '9px 12px',
+            background: 'linear-gradient(180deg, rgba(34,34,40,0.97) 0%, rgba(16,16,20,0.98) 100%)',
+            border: `1px solid ${N.borderHi}`, borderRadius: 22,
             backdropFilter: 'blur(20px) saturate(180%)', WebkitBackdropFilter: 'blur(20px) saturate(180%)',
-            boxShadow: '0 10px 34px rgba(0,0,0,0.55), inset 0 1px 0 rgba(255,255,255,0.14)',
+            boxShadow: '0 12px 38px rgba(0,0,0,0.6), inset 0 1px 0 rgba(255,255,255,0.14)',
           }}>
-            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, justifyContent: 'center' }}>
-              <Btn onClick={() => setBlock('H1')} title="Title"><span style={{ fontFamily: N.bebas, fontSize: 17 }}>Title</span></Btn>
-              <Btn onClick={() => setBlock('H2')} title="Heading"><span style={{ fontWeight: 700, fontSize: 15 }}>Heading</span></Btn>
+            {/* Row 1 — block styles + break-out */}
+            <div style={{ display: 'flex', gap: 6, justifyContent: 'space-between', alignItems: 'stretch' }}>
+              <Btn onClick={() => setBlock('H1')} title="Title"><span style={{ fontFamily: N.bebas, fontSize: 16 }}>Title</span></Btn>
+              <Btn onClick={() => setBlock('H2')} title="Heading"><span style={{ fontWeight: 700, fontSize: 14 }}>Heading</span></Btn>
               <Btn onClick={() => setBlock('H3')} title="Subheading"><span style={{ fontWeight: 600, fontSize: 13 }}>Subhead</span></Btn>
               <Btn onClick={() => setBlock('P')} title="Body"><span style={{ fontSize: 13 }}>Body</span></Btn>
+              <Btn onClick={detachBlock} title="Break out of heading group">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round"><path d="M18.84 12.25l1.72-1.71a4 4 0 0 0-5.66-5.66l-1.71 1.72M5.16 11.75l-1.72 1.71a4 4 0 0 0 5.66 5.66l1.71-1.72M8 2v3M2 8h3M16 22v-3M22 16h-3"/></svg>
+              </Btn>
             </div>
-            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, justifyContent: 'center', alignItems: 'stretch' }}>
+            {/* Row 2 — inline formatting + hide */}
+            <div style={{ display: 'flex', gap: 6, justifyContent: 'space-between', alignItems: 'stretch' }}>
               <Btn onClick={() => exec('bold')} title="Bold"><b>B</b></Btn>
               <Btn onClick={() => exec('italic')} title="Italic"><i>I</i></Btn>
               <Btn onClick={() => exec('underline')} title="Underline"><u>U</u></Btn>
               <Btn onClick={() => exec('strikeThrough')} title="Strikethrough"><s>S</s></Btn>
-              <Sep />
               <Btn onClick={() => exec('insertUnorderedList')} title="Bullet list">
                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01"/></svg>
               </Btn>
@@ -208,7 +259,6 @@ export function RichEditor({ value, onChange }: { value: string; onChange: (html
               <Btn onClick={addLink} title="Add link">
                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M10 13a5 5 0 0 0 7 0l3-3a5 5 0 0 0-7-7l-1 1M14 11a5 5 0 0 0-7 0l-3 3a5 5 0 0 0 7 7l1-1"/></svg>
               </Btn>
-              <Sep />
               <Btn onClick={() => toggleBar(false)} title="Hide formatting bar">
                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M6 9l6 6 6-6"/></svg>
               </Btn>
@@ -216,6 +266,8 @@ export function RichEditor({ value, onChange }: { value: string; onChange: (html
           </div>
         ) : (
           <button
+            key="closed"
+            className="pill-pop"
             onMouseDown={e => e.preventDefault()}
             onClick={() => toggleBar(true)}
             title="Show formatting bar"
@@ -225,7 +277,7 @@ export function RichEditor({ value, onChange }: { value: string; onChange: (html
               background: 'linear-gradient(180deg, rgba(34,34,40,0.96), rgba(16,16,20,0.97))',
               border: `1px solid ${N.borderHi}`, color: N.textSec,
               backdropFilter: 'blur(20px) saturate(180%)', WebkitBackdropFilter: 'blur(20px) saturate(180%)',
-              boxShadow: '0 10px 34px rgba(0,0,0,0.55), inset 0 1px 0 rgba(255,255,255,0.14)',
+              boxShadow: '0 12px 38px rgba(0,0,0,0.6), inset 0 1px 0 rgba(255,255,255,0.14)',
               fontFamily: N.font, fontSize: 14, fontWeight: 700,
             }}
           >
@@ -256,6 +308,3 @@ function Btn({ children, onClick, title }: { children: React.ReactNode; onClick:
   )
 }
 
-function Sep() {
-  return <div style={{ width: 1, alignSelf: 'stretch', background: N.border, margin: '2px 2px' }} />
-}

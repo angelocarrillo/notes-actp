@@ -33,10 +33,16 @@ view AND edit.** It replaces the **Projects** card in the AIO dashboard.
   same-or-higher heading (state saved via `data-collapsed`). Styling for headings,
   chevrons, lists, links, and the placeholder lives in `globals.css` under
   `.rich-editor`. **Paste** is forced to plain text so it inherits the note's
-  styling. The formatting controls live in a **floating, centered pill** fixed to
-  the bottom of the note that rides above the on-screen keyboard (VisualViewport
-  API, `kbInset`) and can be **tucked away** to an "Aa" chip (persisted in
-  `localStorage['notes_fmtbar_open']`). Links open on a plain tap.
+  styling. The formatting controls live in a **floating, centered pill** with two
+  full-width rows (space-between, so it reads the same on mobile and desktop). It is
+  **pinned to the bottom of the visual viewport** — `pillRef.offsetHeight` +
+  VisualViewport `offsetTop/height` + a `ResizeObserver` compute `pillTop` so it is
+  *always* just above the on-screen keyboard, never behind it. It can be **tucked
+  away** to an "Aa" chip (persisted in `localStorage['notes_fmtbar_open']`) with a
+  grow/shrink animation (`.pill-pop` in `globals.css`). Row 1 also has a **break-out**
+  button (`detachBlock`) that toggles `data-detached` on the caret's block so a body
+  paragraph can be excluded from its heading's collapse group (styled with an accent
+  left border). Links open on a plain tap.
 - **To-Do List** — checklist rows (`items[]` with `done`), tap to complete. Each row
   can carry an optional **due date** (stored in `item.date`); the row shows a colored
   Overdue / Due today / Due in Nd chip.
