@@ -191,10 +191,20 @@ momentum into the parent, clipping AIO's "Return to AIO" header. With one bounde
 inner scroll layer, the pill (`position:fixed`) and the editor's
 `position:sticky` header stay pinned and scroll never leaves the iframe.
 `BottomNav`'s hide-on-scroll listens on the active `.notes-scroll` element
-(re-bound per route), not `window`. The AIO embed (`finance-dashboard
-/app/notes/page.tsx`) adds `paddingBottom:env(safe-area-inset-bottom)` to the
-iframe container, since a cross-origin iframe always reads the safe-area inset as
-`0` — this keeps the pill above the home indicator.
+(re-bound per route), not `window`. The page header (`PageHead`) and the AIO
+"Return to AIO" bar both use `touch-action:none` so a swipe on the header can't
+start a scroll/overscroll (which re-triggered the layering glitch); taps still work.
+
+**Safe-area inset bridge.** A cross-origin iframe always reads
+`env(safe-area-inset-bottom)` as `0`, so the AIO embed (`finance-dashboard
+/app/notes/page.tsx`) measures the device inset and `postMessage`s
+`{type:'aio-safe', safeBottom}` in. `BottomNavWrapper` stores it on the
+`--aio-safe-bottom` CSS var, and the pill's bottom uses
+`max(env(safe-area-inset-bottom), var(--aio-safe-bottom,0px)) + 16px` — correct
+both standalone and embedded, with **no** reserved black strip in the iframe
+container. (The editor's keyboard bridge already works the same way via
+`aio-kb`; do **not** add container padding — it shifts the iframe coordinate
+frame and mis-positions the editor's format pill.)
 
 ## Key files
 ```

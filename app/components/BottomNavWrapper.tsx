@@ -26,6 +26,19 @@ export default function BottomNavWrapper() {
     try { window.parent.postMessage({ type: 'aio-nav', isHome: pathname === '/' }, '*') } catch { /* ignore */ }
   }, [pathname])
 
+  // The AIO parent forwards the device's bottom safe-area inset (a cross-origin
+  // iframe reads env(safe-area-inset-bottom) as 0). Expose it as a CSS var so the
+  // bottom-nav pill can clear the home indicator when embedded.
+  useEffect(() => {
+    const onMsg = (e: MessageEvent) => {
+      if (e.data && e.data.type === 'aio-safe' && typeof e.data.safeBottom === 'number') {
+        document.documentElement.style.setProperty('--aio-safe-bottom', `${e.data.safeBottom}px`)
+      }
+    }
+    window.addEventListener('message', onMsg)
+    return () => window.removeEventListener('message', onMsg)
+  }, [])
+
   useEffect(() => {
     if (!user) return
     getDoc(doc(db, 'users', user.uid, 'prefs', 'notesAccent')).then(snap => {

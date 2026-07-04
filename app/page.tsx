@@ -36,7 +36,7 @@ export default function HomePage() {
 
   return (
     <NotePage>
-      <div style={{ paddingTop: 'calc(env(safe-area-inset-top) + 16px)', paddingBottom: 'calc(env(safe-area-inset-bottom) + 120px)' }}>
+      <div style={{ paddingTop: 'calc(env(safe-area-inset-top) + 16px)', paddingBottom: 'calc(max(env(safe-area-inset-bottom), var(--aio-safe-bottom, 0px)) + 120px)' }}>
         <PageHead
           eyebrow="Household"
           title="Notes"

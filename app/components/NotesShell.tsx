@@ -143,6 +143,9 @@ export function PageHead({ eyebrow, title, back = false, trail }: PageHeadProps)
     <div style={{
       display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between',
       padding: '0 20px 4px',
+      // Swiping on the title header shouldn't start a scroll/overscroll — that
+      // was re-triggering the iframe layering glitch. Taps (＋, back) still work.
+      touchAction: 'none',
     }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: 10, minWidth: 0 }}>
         {back && (
@@ -368,7 +371,10 @@ export function BottomNav() {
 
   return (
     <nav style={{
-      position: 'fixed', bottom: 'calc(env(safe-area-inset-bottom) + 16px)',
+      // Embedded in the AIO iframe, env(safe-area-inset-bottom) reads 0, so also
+      // honor --aio-safe-bottom (the real inset the AIO parent posts in). Uses
+      // whichever is larger, so standalone and embedded both clear the indicator.
+      position: 'fixed', bottom: 'calc(max(env(safe-area-inset-bottom), var(--aio-safe-bottom, 0px)) + 16px)',
       left: '50%',
       transform: `translateX(-50%) translateY(${visible && !modalOpen ? '0' : 'calc(100% + env(safe-area-inset-bottom) + 32px)'})`,
       transition: 'transform 0.38s cubic-bezier(0.32, 0.72, 0, 1)',
