@@ -64,7 +64,7 @@ export function NotePage({ children }: { children: React.ReactNode }) {
     // Scrolling happens ONLY in the inner `.notes-scroll` region below, so the
     // bottom-nav pill stays pinned and scroll never chains out to the AIO parent.
     <div style={{
-      height: '100dvh', background: N.bg, color: N.text,
+      height: '100%', background: N.bg, color: N.text,
       fontFamily: N.font, position: 'relative', overflow: 'hidden',
       display: 'flex', flexDirection: 'column',
     }}>

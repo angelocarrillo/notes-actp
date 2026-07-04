@@ -22,6 +22,17 @@ html, body {
   overscroll-behavior: none;
 }
 
+/* Pin the body to the exact viewport (incl. under the home indicator with
+   viewport-fit=cover). Using a fixed body instead of `100dvh` avoids the
+   dynamic-viewport gap that showed a black bar under the app. `touch-action:
+   manipulation` also removes iOS double-tap-to-zoom. */
+body {
+  position: fixed;
+  inset: 0;
+  overflow: hidden;
+  touch-action: manipulation;
+}
+
 /* Single scroll layer for every page (see NotePage in NotesShell.tsx). */
 .notes-scroll {
   -webkit-overflow-scrolling: touch;

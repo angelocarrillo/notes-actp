@@ -26,6 +26,22 @@ export default function BottomNavWrapper() {
     try { window.parent.postMessage({ type: 'aio-nav', isHome: pathname === '/' }, '*') } catch { /* ignore */ }
   }, [pathname])
 
+  // Block pinch / gesture zoom everywhere. iOS Safari ignores the viewport
+  // `maximum-scale`/`user-scalable=no` hints (esp. inside the AIO iframe), so we
+  // preventDefault the non-standard gesture events. (Focus-zoom on text fields is
+  // handled separately by keeping every editable ≥ 16px.)
+  useEffect(() => {
+    const prevent = (e: Event) => e.preventDefault()
+    document.addEventListener('gesturestart', prevent)
+    document.addEventListener('gesturechange', prevent)
+    document.addEventListener('gestureend', prevent)
+    return () => {
+      document.removeEventListener('gesturestart', prevent)
+      document.removeEventListener('gesturechange', prevent)
+      document.removeEventListener('gestureend', prevent)
+    }
+  }, [])
+
   // The AIO parent forwards the device's bottom safe-area inset (a cross-origin
   // iframe reads env(safe-area-inset-bottom) as 0). Expose it as a CSS var so the
   // bottom-nav pill can clear the home indicator when embedded.

@@ -225,8 +225,10 @@ export function RichEditor({ value, onChange }: { value: string; onChange: (html
         onBlur={() => { focused.current = false; emit() }}
         data-placeholder="Start writing…  (type “- ” for a bullet, tap a heading’s ▸ to collapse)"
         style={{
+          // 16px (not 15.5) so iOS doesn't zoom in when the editor is focused —
+          // Safari auto-zooms any focused editable whose font-size is < 16px.
           minHeight: 300, outline: 'none', color: N.text,
-          fontFamily: N.font, fontSize: 15.5, lineHeight: 1.6,
+          fontFamily: N.font, fontSize: 16, lineHeight: 1.6,
           background: 'rgba(255,255,255,0.03)', border: `1px solid ${N.border}`,
           borderRadius: 12, padding: '14px 16px 96px',
           ['--na-link' as string]: noteA('ff'),

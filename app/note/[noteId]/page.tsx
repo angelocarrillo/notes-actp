@@ -106,7 +106,7 @@ export default function NoteEditorPage({ params }: { params: Promise<{ noteId: s
   if (missing) {
     return (
       <NotePage>
-        <div style={{ minHeight: '100dvh', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 16, padding: 30 }}>
+        <div style={{ minHeight: '100%', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 16, padding: 30 }}>
           <div style={{ fontFamily: N.bebas, fontSize: 30, color: N.textSec }}>Note unavailable</div>
           <p style={{ color: N.textMut, fontSize: 13, textAlign: 'center' }}>It may have been deleted or a share was removed.</p>
           <PillBtn onClick={() => router.push('/')}>Back to notes</PillBtn>

@@ -180,10 +180,12 @@ Shared components: `NotePage`, `Glass`, `PageHead`, `SectionLbl`, `StatPill`,
 `AddBtn`, `PillBtn`, `BottomNav`. Card component: `app/components/NoteCard.tsx`.
 
 ### Scroll model — app shell, one inner scroll layer (iOS/iframe safe)
-The document itself never scrolls. `globals.css` locks `html, body` to
-`height:100%; overflow:hidden`, and `NotePage` is a `100dvh` non-scrolling flex
-shell whose only scrolling child is the inner **`.notes-scroll`** region
-(`flex:1; overflow-y:auto; overscroll-behavior:contain`). This is required
+The document itself never scrolls. `globals.css` pins `body` to the exact
+viewport (`position:fixed; inset:0; overflow:hidden`) — a **fixed body, not
+`100dvh`**, to avoid the dynamic-viewport gap that left a black bar under the app.
+`NotePage` fills it (`height:100%`) as a non-scrolling flex shell whose only
+scrolling child is the inner **`.notes-scroll`** region (`flex:1;
+overflow-y:auto; overscroll-behavior:contain`). This is required
 because inside the **AIO iframe on iOS**, a document-scrolling page auto-expands
 to content height and handles `position:fixed` relative to the whole content
 (not the viewport) — which un-pinned the `BottomNav` pill and chained scroll
@@ -205,6 +207,12 @@ both standalone and embedded, with **no** reserved black strip in the iframe
 container. (The editor's keyboard bridge already works the same way via
 `aio-kb`; do **not** add container padding — it shifts the iframe coordinate
 frame and mis-positions the editor's format pill.)
+
+**No zoom.** All editables are ≥ 16px (globals force inputs to 16px; the
+contentEditable `.rich-editor` is 16px) so iOS never focus-zooms a text field.
+`body` has `touch-action:manipulation` (no double-tap zoom) and
+`BottomNavWrapper` preventDefaults `gesturestart/change/end` to block pinch-zoom,
+since iOS ignores the viewport `maximum-scale`/`user-scalable` hints.
 
 ## Key files
 ```
