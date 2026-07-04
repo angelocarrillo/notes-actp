@@ -64,21 +64,24 @@ export function NotePage({ children }: { children: React.ReactNode }) {
   // iframe (see `html[data-embedded]`). Keeps the JSX identical for both.
   return (
     <div className="note-shell" style={{ fontFamily: N.font }}>
-      {/* Decorative glows — anchored to the shell so they stay behind content. */}
+      {/* Decorative glows + grain — `position: fixed` so they stay pinned to the
+          viewport and are NOT repainted as the document scrolls (standalone).
+          Repainting these blurred/noise layers every scroll frame was the cause
+          of the standalone scroll stutter. */}
       <div style={{
-        position: 'absolute', top: -180, left: -120, width: 420, height: 420,
+        position: 'fixed', top: -180, left: -120, width: 420, height: 420,
         borderRadius: '50%', pointerEvents: 'none', zIndex: 0,
         background: `radial-gradient(circle, ${noteA('28')} 0%, ${noteA('0c')} 35%, transparent 70%)`,
         filter: 'blur(40px)',
       }} />
       <div style={{
-        position: 'absolute', bottom: -220, right: -140, width: 440, height: 440,
+        position: 'fixed', bottom: -220, right: -140, width: 440, height: 440,
         borderRadius: '50%', pointerEvents: 'none', zIndex: 0,
         background: `radial-gradient(circle, ${noteA('1c')} 0%, ${noteA('08')} 40%, transparent 70%)`,
         filter: 'blur(50px)',
       }} />
       <div style={{
-        position: 'absolute', inset: 0, pointerEvents: 'none', zIndex: 0,
+        position: 'fixed', inset: 0, pointerEvents: 'none', zIndex: 0,
         opacity: 0.035, backgroundImage: GRAIN,
       }} />
       <div className="notes-scroll">

@@ -221,14 +221,20 @@ container. (The editor's keyboard bridge already works the same way via
 `aio-kb`; do **not** add container padding — it shifts the iframe coordinate
 frame and mis-positions the editor's format pill.)
 
-**Editor keyboard (RichEditor).** The format pill is pinned above the keyboard.
-Modern iOS shrinks the iframe's *own* `visualViewport` for the keyboard, so the
-editor trusts that directly when it shrank (`ownKb > 60`) and only falls back to
-the parent's `aio-kb` height when it didn't — trusting **both** double-counts the
-keyboard and floats the pill into the middle of the note. When embedded, the
-editor also adds a keyboard-height **bottom inset** (`kbInset`) to the
-contentEditable so its last lines can scroll above the keyboard (standalone gets
-that inset from the browser automatically).
+**Editor keyboard (RichEditor).** The format pill is **anchored to the bottom**
+and lifted by the keyboard height `kb` (`bottom: kb + 8`), NOT positioned by a
+computed `top`. A `top`-based calc depended on `visualViewport.offsetTop`, which
+shifts when you tap near the bottom of the note — that put the pill *behind* the
+keyboard. Bottom-anchoring is position-independent. `kb` = the iframe's own
+`visualViewport` shrink when it reflects the keyboard (`ownKb > 60`), else the
+parent's `aio-kb` height. When embedded, the editor also adds a keyboard-height
+**bottom padding** to the contentEditable so its last lines scroll above the
+keyboard (standalone gets that inset from the browser automatically).
+
+**Scroll performance.** The decorative glow/grain layers in `NotePage` are
+`position: fixed` (not `absolute`). Standalone the document scrolls, and blurred/
+noise layers that scroll with it get repainted every frame → visible stutter.
+Fixed keeps them pinned to the viewport so only the content scrolls.
 
 **No zoom.** All editables are ≥ 16px (globals force inputs to 16px; the
 contentEditable `.rich-editor` is 16px) so iOS never focus-zooms a text field.
