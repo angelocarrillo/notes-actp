@@ -19,6 +19,13 @@ export default function BottomNavWrapper() {
   // localStorage for third-party origins.
   useEffect(() => { restoreAccent() }, [])
 
+  // When embedded in the AIO iframe, tell the parent which page we're on so it
+  // only shows its "Return to AIO" header on our home page (full screen elsewhere).
+  useEffect(() => {
+    if (typeof window === 'undefined' || window.self === window.top) return
+    try { window.parent.postMessage({ type: 'aio-nav', isHome: pathname === '/' }, '*') } catch { /* ignore */ }
+  }, [pathname])
+
   useEffect(() => {
     if (!user) return
     getDoc(doc(db, 'users', user.uid, 'prefs', 'notesAccent')).then(snap => {
