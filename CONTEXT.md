@@ -179,6 +179,23 @@ the AIO iframe (where third-party localStorage is blocked).
 Shared components: `NotePage`, `Glass`, `PageHead`, `SectionLbl`, `StatPill`,
 `AddBtn`, `PillBtn`, `BottomNav`. Card component: `app/components/NoteCard.tsx`.
 
+### Scroll model — app shell, one inner scroll layer (iOS/iframe safe)
+The document itself never scrolls. `globals.css` locks `html, body` to
+`height:100%; overflow:hidden`, and `NotePage` is a `100dvh` non-scrolling flex
+shell whose only scrolling child is the inner **`.notes-scroll`** region
+(`flex:1; overflow-y:auto; overscroll-behavior:contain`). This is required
+because inside the **AIO iframe on iOS**, a document-scrolling page auto-expands
+to content height and handles `position:fixed` relative to the whole content
+(not the viewport) — which un-pinned the `BottomNav` pill and chained scroll
+momentum into the parent, clipping AIO's "Return to AIO" header. With one bounded
+inner scroll layer, the pill (`position:fixed`) and the editor's
+`position:sticky` header stay pinned and scroll never leaves the iframe.
+`BottomNav`'s hide-on-scroll listens on the active `.notes-scroll` element
+(re-bound per route), not `window`. The AIO embed (`finance-dashboard
+/app/notes/page.tsx`) adds `paddingBottom:env(safe-area-inset-bottom)` to the
+iframe container, since a cross-origin iframe always reads the safe-area inset as
+`0` — this keeps the pill above the home indicator.
+
 ## Key files
 ```
 app/
@@ -221,6 +238,9 @@ the setup steps in the chat / README.)
 - **Rich-text Blank notes** (headings, B/I/U/S, auto-bullets, indent, links, collapsible headings).
 - **Folder suggestions** (datalist of existing folders) in the note editor.
 - **Due dates** on To-Do items; due dates + Timeline milestones surfaced on the AIO dashboard.
+- **App-shell scroll model** (one inner `.notes-scroll` layer) — fixes iframe-only
+  layering/scroll bugs on iOS: bottom-nav pill now stays pinned, and AIO's
+  "Return to AIO" header no longer gets scrolled/clipped on the home screen.
 
 ### Not yet done / ideas
 - Deploy to Vercel (needs GitHub repo + Vercel project; URL confirm).

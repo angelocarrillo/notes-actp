@@ -12,8 +12,20 @@ html, body {
   color: #f2f2f4;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
-  /* Keep this the only scroll layer — don't chain scroll out to the AIO iframe parent */
+  /* The document itself never scrolls — each page owns a single inner
+     `.notes-scroll` region instead. This stops iOS (esp. inside the AIO
+     iframe) from auto-expanding the document to content height and chaining
+     scroll momentum out to the parent, which was clipping the "Return to AIO"
+     header and un-pinning the bottom nav pill. */
+  height: 100%;
+  overflow: hidden;
   overscroll-behavior: none;
+}
+
+/* Single scroll layer for every page (see NotePage in NotesShell.tsx). */
+.notes-scroll {
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior: contain;
 }
 
 a { text-decoration: none; color: inherit; }

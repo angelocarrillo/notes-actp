@@ -60,27 +60,36 @@ const GRAIN = "url(\"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg
 // ─── NotePage — full-screen shell ────────────────────────────────────────────
 export function NotePage({ children }: { children: React.ReactNode }) {
   return (
+    // Non-scrolling shell that exactly fills the viewport (or the AIO iframe).
+    // Scrolling happens ONLY in the inner `.notes-scroll` region below, so the
+    // bottom-nav pill stays pinned and scroll never chains out to the AIO parent.
     <div style={{
-      minHeight: '100dvh', background: N.bg, color: N.text,
+      height: '100dvh', background: N.bg, color: N.text,
       fontFamily: N.font, position: 'relative', overflow: 'hidden',
+      display: 'flex', flexDirection: 'column',
     }}>
+      {/* Decorative glows — anchored to the shell (absolute, not fixed) so they
+          stay put behind the scrolling content. */}
       <div style={{
-        position: 'fixed', top: -180, left: -120, width: 420, height: 420,
+        position: 'absolute', top: -180, left: -120, width: 420, height: 420,
         borderRadius: '50%', pointerEvents: 'none', zIndex: 0,
         background: `radial-gradient(circle, ${noteA('28')} 0%, ${noteA('0c')} 35%, transparent 70%)`,
         filter: 'blur(40px)',
       }} />
       <div style={{
-        position: 'fixed', bottom: -220, right: -140, width: 440, height: 440,
+        position: 'absolute', bottom: -220, right: -140, width: 440, height: 440,
         borderRadius: '50%', pointerEvents: 'none', zIndex: 0,
         background: `radial-gradient(circle, ${noteA('1c')} 0%, ${noteA('08')} 40%, transparent 70%)`,
         filter: 'blur(50px)',
       }} />
       <div style={{
-        position: 'fixed', inset: 0, pointerEvents: 'none', zIndex: 0,
+        position: 'absolute', inset: 0, pointerEvents: 'none', zIndex: 0,
         opacity: 0.035, backgroundImage: GRAIN,
       }} />
-      <div style={{ position: 'relative', zIndex: 1 }}>
+      <div className="notes-scroll" style={{
+        position: 'relative', zIndex: 1,
+        flex: 1, minHeight: 0, overflowY: 'auto',
+      }}>
         {children}
       </div>
     </div>
@@ -331,17 +340,23 @@ export function BottomNav() {
     return () => clearTimeout(tid)
   }, [activeIdx])
 
+  // Scrolling lives in the page's inner `.notes-scroll` region (see NotePage),
+  // not on the window — so hide-on-scroll listens there. Re-bind per route since
+  // each page mounts its own scroll container.
   useEffect(() => {
+    const el = document.querySelector('.notes-scroll') as HTMLElement | null
+    if (!el) { setVisible(true); return }
+    lastY.current = el.scrollTop
     const onScroll = () => {
-      const y = window.scrollY
+      const y = el.scrollTop
       if      (y < 16)                 setVisible(true)
       else if (y < lastY.current - 32) setVisible(true)
       else if (y > lastY.current + 8)  setVisible(false)
       lastY.current = y
     }
-    window.addEventListener('scroll', onScroll, { passive: true })
-    return () => window.removeEventListener('scroll', onScroll)
-  }, [])
+    el.addEventListener('scroll', onScroll, { passive: true })
+    return () => el.removeEventListener('scroll', onScroll)
+  }, [pathname])
 
   useEffect(() => {
     const sync = () => setModalOpen(document.body.hasAttribute('data-modal'))
