@@ -180,12 +180,25 @@ Shared components: `NotePage`, `Glass`, `PageHead`, `SectionLbl`, `StatPill`,
 `AddBtn`, `PillBtn`, `BottomNav`. Card component: `app/components/NoteCard.tsx`.
 
 ### Scroll model — app shell, one inner scroll layer (iOS/iframe safe)
-The document itself never scrolls. `globals.css` pins `body` to the exact
-viewport (`position:fixed; inset:0; overflow:hidden`) — a **fixed body, not
-`100dvh`**, to avoid the dynamic-viewport gap that left a black bar under the app.
-`NotePage` fills it (`height:100%`) as a non-scrolling flex shell whose only
-scrolling child is the inner **`.notes-scroll`** region (`flex:1;
-overflow-y:auto; overscroll-behavior:contain`). This is required
+The scroll model is **conditional on embedding**, driven by `data-embedded="1"`
+on `<html>` (set by an inline script in `layout.tsx` before paint when
+`window.self !== window.top`). `NotePage` always renders `.note-shell` >
+`.notes-scroll`; `globals.css` styles them per mode:
+
+- **Standalone** (own tab / added-to-home-screen): the **document scrolls**
+  (`.note-shell { min-height:100dvh }`, `.notes-scroll` is a plain block). This
+  is essential — a non-scrolling page stops iOS Safari from collapsing its
+  bottom toolbar, which showed up as a **black box** at the bottom. Document
+  scroll = toolbar collapses = full-screen.
+- **Embedded in the AIO iframe** (`html[data-embedded="1"]`): the document is
+  locked (`body { position:fixed; inset:0; overflow:hidden }`) and only the inner
+  **`.notes-scroll`** region scrolls (`flex:1; overflow-y:auto;
+  overscroll-behavior:contain`). This stops iOS from auto-expanding the iframe to
+  content height and chaining scroll into the parent (which clipped the "Return
+  to AIO" header and un-pinned the bottom-nav pill).
+
+`BottomNav`'s hide-on-scroll listens on `window` (standalone) or `.notes-scroll`
+(embedded) accordingly. This is required
 because inside the **AIO iframe on iOS**, a document-scrolling page auto-expands
 to content height and handles `position:fixed` relative to the whole content
 (not the viewport) — which un-pinned the `BottomNav` pill and chained scroll

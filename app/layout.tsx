@@ -22,6 +22,13 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
   return (
     <html lang="en">
       <body>
+        {/* Mark the document as embedded BEFORE paint when running inside the AIO
+            iframe, so globals.css can switch to the iframe-safe scroll-lock. */}
+        <script
+          dangerouslySetInnerHTML={{
+            __html: "try{if(window.self!==window.top){document.documentElement.setAttribute('data-embedded','1')}}catch(e){document.documentElement.setAttribute('data-embedded','1')}",
+          }}
+        />
         <AuthGate>
           {children}
           <BottomNavWrapper />

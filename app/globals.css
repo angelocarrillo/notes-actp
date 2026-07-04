@@ -12,29 +12,42 @@ html, body {
   color: #f2f2f4;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
-  /* The document itself never scrolls — each page owns a single inner
-     `.notes-scroll` region instead. This stops iOS (esp. inside the AIO
-     iframe) from auto-expanding the document to content height and chaining
-     scroll momentum out to the parent, which was clipping the "Return to AIO"
-     header and un-pinning the bottom nav pill. */
-  height: 100%;
-  overflow: hidden;
   overscroll-behavior: none;
+  touch-action: manipulation;   /* no iOS double-tap-to-zoom */
 }
 
-/* Pin the body to the exact viewport (incl. under the home indicator with
-   viewport-fit=cover). Using a fixed body instead of `100dvh` avoids the
-   dynamic-viewport gap that showed a black bar under the app. `touch-action:
-   manipulation` also removes iOS double-tap-to-zoom. */
-body {
-  position: fixed;
-  inset: 0;
+/* ── App shell ────────────────────────────────────────────────────────────
+   STANDALONE (own tab / added-to-home-screen): the DOCUMENT scrolls. This is
+   what lets iOS Safari collapse its toolbar so the app fills the whole screen
+   (a non-scrolling page keeps that bottom bar, which looked like a black box).
+
+   EMBEDDED in the AIO iframe (`html[data-embedded="1"]`, set by the inline
+   script in layout.tsx before paint): lock the document and scroll a single
+   inner `.notes-scroll` layer instead — this stops iOS from auto-expanding the
+   iframe to content height and chaining scroll into the parent (which was
+   clipping the "Return to AIO" header and un-pinning the bottom-nav pill). */
+.note-shell {
+  position: relative;
+  min-height: 100dvh;
+  background: #0a0a0c;
+  color: #f2f2f4;
+}
+.notes-scroll { position: relative; z-index: 1; }
+
+html[data-embedded="1"],
+html[data-embedded="1"] body { height: 100%; overflow: hidden; }
+html[data-embedded="1"] body { position: fixed; inset: 0; }
+html[data-embedded="1"] .note-shell {
+  height: 100%;
+  min-height: 0;
   overflow: hidden;
-  touch-action: manipulation;
+  display: flex;
+  flex-direction: column;
 }
-
-/* Single scroll layer for every page (see NotePage in NotesShell.tsx). */
-.notes-scroll {
+html[data-embedded="1"] .notes-scroll {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
   -webkit-overflow-scrolling: touch;
   overscroll-behavior: contain;
 }

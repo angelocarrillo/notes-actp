@@ -59,17 +59,12 @@ const GRAIN = "url(\"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg
 
 // ─── NotePage — full-screen shell ────────────────────────────────────────────
 export function NotePage({ children }: { children: React.ReactNode }) {
+  // Layout (scroll model) is driven by CSS in globals.css — `.note-shell` +
+  // `.notes-scroll`, which behave differently standalone vs. embedded in the AIO
+  // iframe (see `html[data-embedded]`). Keeps the JSX identical for both.
   return (
-    // Non-scrolling shell that exactly fills the viewport (or the AIO iframe).
-    // Scrolling happens ONLY in the inner `.notes-scroll` region below, so the
-    // bottom-nav pill stays pinned and scroll never chains out to the AIO parent.
-    <div style={{
-      height: '100%', background: N.bg, color: N.text,
-      fontFamily: N.font, position: 'relative', overflow: 'hidden',
-      display: 'flex', flexDirection: 'column',
-    }}>
-      {/* Decorative glows — anchored to the shell (absolute, not fixed) so they
-          stay put behind the scrolling content. */}
+    <div className="note-shell" style={{ fontFamily: N.font }}>
+      {/* Decorative glows — anchored to the shell so they stay behind content. */}
       <div style={{
         position: 'absolute', top: -180, left: -120, width: 420, height: 420,
         borderRadius: '50%', pointerEvents: 'none', zIndex: 0,
@@ -86,10 +81,7 @@ export function NotePage({ children }: { children: React.ReactNode }) {
         position: 'absolute', inset: 0, pointerEvents: 'none', zIndex: 0,
         opacity: 0.035, backgroundImage: GRAIN,
       }} />
-      <div className="notes-scroll" style={{
-        position: 'relative', zIndex: 1,
-        flex: 1, minHeight: 0, overflowY: 'auto',
-      }}>
+      <div className="notes-scroll">
         {children}
       </div>
     </div>
@@ -343,22 +335,25 @@ export function BottomNav() {
     return () => clearTimeout(tid)
   }, [activeIdx])
 
-  // Scrolling lives in the page's inner `.notes-scroll` region (see NotePage),
-  // not on the window — so hide-on-scroll listens there. Re-bind per route since
-  // each page mounts its own scroll container.
+  // Hide-on-scroll target depends on the scroll model: the window when standalone
+  // (document scrolls), or the inner `.notes-scroll` region when embedded in the
+  // AIO iframe. Re-bind per route since each page mounts its own container.
   useEffect(() => {
-    const el = document.querySelector('.notes-scroll') as HTMLElement | null
-    if (!el) { setVisible(true); return }
-    lastY.current = el.scrollTop
+    const embedded = document.documentElement.dataset.embedded === '1'
+    const el = embedded ? (document.querySelector('.notes-scroll') as HTMLElement | null) : null
+    if (embedded && !el) { setVisible(true); return }
+    const getY = () => (el ? el.scrollTop : window.scrollY)
+    const target: EventTarget = el ?? window
+    lastY.current = getY()
     const onScroll = () => {
-      const y = el.scrollTop
+      const y = getY()
       if      (y < 16)                 setVisible(true)
       else if (y < lastY.current - 32) setVisible(true)
       else if (y > lastY.current + 8)  setVisible(false)
       lastY.current = y
     }
-    el.addEventListener('scroll', onScroll, { passive: true })
-    return () => el.removeEventListener('scroll', onScroll)
+    target.addEventListener('scroll', onScroll, { passive: true })
+    return () => target.removeEventListener('scroll', onScroll)
   }, [pathname])
 
   useEffect(() => {
