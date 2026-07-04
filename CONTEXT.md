@@ -237,10 +237,14 @@ now converge on the same model while the keyboard is open:
   (globals.css), which locks the document into the embedded scroll model AND fits
   `.note-shell` to the visual viewport via `--vvt`/`--vvh` (kept in sync on vv
   resize/scroll). Scroll position is carried document ⇄ `.notes-scroll` on
-  lock/unlock. The document never scrolls/pans → the fixed pill
-  (`bottom: kb + 8`) tracks with **zero lag** and the whole note stays
-  scrollable. Unlocked on keyboard dismiss so Safari's toolbar-collapse
-  (needs a scrolling document) keeps working.
+  lock/unlock. The document never scrolls/pans → the fixed pill tracks with
+  **zero lag** and the whole note stays scrollable. Unlocked on keyboard
+  dismiss so Safari's toolbar-collapse (needs a scrolling document) keeps
+  working. The pill is **top-anchored purely from the visual viewport**
+  (`pillTop = vv.offsetTop + vv.height − pillHeight − 8`, re-measured when the
+  bar ⇄ "Aa" chip toggles) — an `innerHeight`-based `bottom: kb + 8` lift
+  overshot by Safari's toolbar delta when focusing at scroll-top (chrome
+  expanded), leaving the pill slightly too high.
 
 The pill has **no CSS transition** on `bottom` (a transition = visible lag).
 The contentEditable keeps only its 96px base bottom padding (pill clearance) —

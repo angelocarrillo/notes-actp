@@ -36,6 +36,12 @@ export function RichEditor({ value, onChange }: { value: string; onChange: (html
   // the bottom and lifted by this — position-independent, so it stays just above
   // the keyboard no matter where in the note you tapped.
   const [kb, setKb] = useState(0)
+  // Standalone + keyboard open: pill `top` computed PURELY from the visual
+  // viewport (offsetTop + height − pillHeight − 8). `innerHeight`-based lifting
+  // overshot by Safari's toolbar delta when the page was at scroll-top (chrome
+  // expanded), leaving the pill slightly too high. null = use bottom anchoring.
+  const [pillTop, setPillTop] = useState<number | null>(null)
+  const measureRef = useRef<(() => void) | null>(null)
   // Whether we're embedded in the AIO iframe (set after mount to avoid a hydration
   // mismatch). Embedded, the parent resizes the iframe to the visual viewport
   // while the keyboard is open, so the pill hugs the iframe bottom; standalone
@@ -99,8 +105,18 @@ export function RichEditor({ value, onChange }: { value: string; onChange: (html
       const ownKb = vv ? Math.max(0, window.innerHeight - vv.height - vv.offsetTop) : 0
       const kbNow = ownKb > 60 ? ownKb : (inIframe ? (parentKb.current ?? 0) : 0)
       syncStandaloneLock(kbNow)
+      // Standalone with the keyboard open: place the pill by `top`, derived only
+      // from the visual viewport (its bottom edge = the real keyboard top in
+      // every Safari-chrome state). Otherwise fall back to bottom anchoring.
+      if (!inIframe && kbNow > 60 && vv) {
+        const h = pillRef.current?.offsetHeight ?? 0
+        setPillTop(Math.round(vv.offsetTop + vv.height - h - 8))
+      } else {
+        setPillTop(null)
+      }
       setKb(prev => (Math.abs(prev - kbNow) > 1 ? kbNow : prev))
     }
+    measureRef.current = measure
     let ticking = false
     const schedule = () => { if (!ticking) { ticking = true; requestAnimationFrame(() => { ticking = false; measure() }) } }
     const onMsg = (e: MessageEvent) => {
@@ -120,9 +136,18 @@ export function RichEditor({ value, onChange }: { value: string; onChange: (html
       vv?.removeEventListener('scroll', schedule)
       window.removeEventListener('resize', schedule)
       window.removeEventListener('message', onMsg)
+      measureRef.current = null
       syncStandaloneLock(0)   // never leave the document locked on unmount
     }
   }, [])
+
+  // The pill's height changes when it's toggled between the full bar and the
+  // "Aa" chip — re-measure (next frame, after it re-renders) so a top-anchored
+  // pill stays glued to the keyboard.
+  useEffect(() => {
+    const id = requestAnimationFrame(() => measureRef.current?.())
+    return () => cancelAnimationFrame(id)
+  }, [barOpen])
 
   // Initialize / sync innerHTML when not actively editing.
   useEffect(() => {
@@ -269,14 +294,19 @@ export function RichEditor({ value, onChange }: { value: string; onChange: (html
           // Keyboard open:
           //  - embedded: the AIO parent has resized the iframe to end exactly at
           //    the keyboard top, so the pill just hugs the iframe bottom.
-          //  - standalone: the document is locked (html[data-kb="1"]) so the
-          //    layout viewport never scrolls; lift by the keyboard height.
+          //  - standalone: top-anchored from the visual viewport (pillTop) — its
+          //    bottom edge = the real keyboard top in every Safari-chrome state
+          //    (innerHeight-based lifting overshot at scroll-top).
           // Keyboard closed: sit just above the home indicator (env inset, or
           // the AIO-bridged --aio-safe-bottom inside the iframe).
           // NO transition — it must track keyboard/viewport changes instantly.
-          bottom: kb > 60
-            ? (embedded ? 8 : kb + 8)
-            : 'calc(max(env(safe-area-inset-bottom), var(--aio-safe-bottom, 0px)) + 16px)',
+          ...(pillTop !== null
+            ? { top: pillTop, bottom: 'auto' }
+            : {
+                bottom: kb > 60
+                  ? (embedded ? 8 : kb + 8)
+                  : 'calc(max(env(safe-area-inset-bottom), var(--aio-safe-bottom, 0px)) + 16px)',
+              }),
           transform: 'translateX(-50%)',
           zIndex: 60,
           width: barOpen ? 'min(440px, calc(100vw - 12px))' : 'auto',
