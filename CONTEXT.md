@@ -221,6 +221,15 @@ container. (The editor's keyboard bridge already works the same way via
 `aio-kb`; do **not** add container padding — it shifts the iframe coordinate
 frame and mis-positions the editor's format pill.)
 
+**Editor keyboard (RichEditor).** The format pill is pinned above the keyboard.
+Modern iOS shrinks the iframe's *own* `visualViewport` for the keyboard, so the
+editor trusts that directly when it shrank (`ownKb > 60`) and only falls back to
+the parent's `aio-kb` height when it didn't — trusting **both** double-counts the
+keyboard and floats the pill into the middle of the note. When embedded, the
+editor also adds a keyboard-height **bottom inset** (`kbInset`) to the
+contentEditable so its last lines can scroll above the keyboard (standalone gets
+that inset from the browser automatically).
+
 **No zoom.** All editables are ≥ 16px (globals force inputs to 16px; the
 contentEditable `.rich-editor` is 16px) so iOS never focus-zooms a text field.
 `body` has `touch-action:manipulation` (no double-tap zoom) and

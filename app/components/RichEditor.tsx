@@ -33,6 +33,10 @@ export function RichEditor({ value, onChange }: { value: string; onChange: (html
   const [barOpen, setBarOpen] = useState(true)
   const pillRef = useRef<HTMLDivElement | null>(null)
   const [pillTop, setPillTop] = useState<number | null>(null)
+  // Extra bottom padding on the editor so its last lines can be scrolled above
+  // the on-screen keyboard when embedded in the AIO iframe (standalone gets this
+  // inset from the browser automatically).
+  const [kbInset, setKbInset] = useState(0)
   // Keyboard height reported by the AIO parent (via postMessage) when this app is
   // embedded in the AIO iframe — inside a cross-origin iframe the VisualViewport
   // API does NOT reflect the on-screen keyboard, so we rely on the parent.
@@ -56,22 +60,35 @@ export function RichEditor({ value, onChange }: { value: string; onChange: (html
       if (!el) return
       const vv = window.visualViewport
       const inIframe = window.self !== window.top
+      // How much our OWN visual viewport has shrunk for the keyboard (0 if it
+      // doesn't reflect the keyboard at all).
+      const ownKb = vv ? Math.max(0, window.innerHeight - vv.height - vv.offsetTop) : 0
       let visibleBottom: number, kbForMargin: number
-      if (inIframe && parentKb.current != null) {
-        // In the AIO iframe: our own VisualViewport doesn't shrink for the
-        // keyboard, so subtract the keyboard height the parent gave us.
+      if (ownKb > 60 && vv) {
+        // Our visual viewport already accounts for the keyboard (independent —
+        // and modern iOS inside the AIO iframe too). Trust it directly; do NOT
+        // also subtract the parent-reported height, or we double-count and the
+        // pill floats up into the middle of the note.
+        visibleBottom = vv.offsetTop + vv.height
+        kbForMargin   = ownKb
+      } else if (inIframe && parentKb.current) {
+        // Our vv didn't shrink for the keyboard — fall back to the height the
+        // AIO parent measured and postMessaged in.
         const full = vv ? vv.height : window.innerHeight
         visibleBottom = full - parentKb.current
         kbForMargin   = parentKb.current
       } else if (vv) {
         visibleBottom = vv.offsetTop + vv.height
-        kbForMargin   = Math.max(0, window.innerHeight - vv.height - vv.offsetTop)
+        kbForMargin   = ownKb
       } else {
         visibleBottom = window.innerHeight
         kbForMargin   = 0
       }
       const margin = kbForMargin > 100 ? 8 : 18
       setPillTop(Math.max(8, visibleBottom - el.offsetHeight - margin))
+      // Bottom inset so the note can scroll its last lines above the keyboard.
+      const inset = inIframe && kbForMargin > 100 ? kbForMargin : 0
+      setKbInset(prev => (Math.abs(prev - inset) > 1 ? inset : prev))
     }
     // rAF-throttle so scroll/resize repositioning tracks instantly without piling up
     let ticking = false
@@ -230,7 +247,7 @@ export function RichEditor({ value, onChange }: { value: string; onChange: (html
           minHeight: 300, outline: 'none', color: N.text,
           fontFamily: N.font, fontSize: 16, lineHeight: 1.6,
           background: 'rgba(255,255,255,0.03)', border: `1px solid ${N.border}`,
-          borderRadius: 12, padding: '14px 16px 96px',
+          borderRadius: 12, padding: `14px 16px ${96 + kbInset}px`,
           ['--na-link' as string]: noteA('ff'),
         } as React.CSSProperties}
       />
