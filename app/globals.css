@@ -52,6 +52,36 @@ html[data-embedded="1"] .notes-scroll {
   overscroll-behavior: contain;
 }
 
+/* STANDALONE + on-screen keyboard (html[data-kb="1"], toggled by RichEditor):
+   while the keyboard is up, switch to the embedded scroll model AND fit the
+   shell to the visual viewport (--vvt / --vvh, kept in sync by RichEditor).
+   With the document locked, iOS never un-pins position:fixed during scroll —
+   the format pill tracks with zero lag — and because the shell ends exactly at
+   the keyboard top, the inner .notes-scroll can reach the whole note no matter
+   where you tapped. Unlocked again on keyboard dismiss so Safari's toolbar
+   collapse (which needs a scrolling document) keeps working. */
+html[data-kb="1"],
+html[data-kb="1"] body { height: 100%; overflow: hidden; }
+html[data-kb="1"] body { position: fixed; inset: 0; }
+html[data-kb="1"] .note-shell {
+  position: fixed;
+  top: var(--vvt, 0px);
+  left: 0;
+  right: 0;
+  height: var(--vvh, 100dvh);
+  min-height: 0;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+html[data-kb="1"] .notes-scroll {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior: contain;
+}
+
 a { text-decoration: none; color: inherit; }
 button { -webkit-tap-highlight-color: transparent; }
 

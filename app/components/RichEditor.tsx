@@ -37,8 +37,9 @@ export function RichEditor({ value, onChange }: { value: string; onChange: (html
   // the keyboard no matter where in the note you tapped.
   const [kb, setKb] = useState(0)
   // Whether we're embedded in the AIO iframe (set after mount to avoid a hydration
-  // mismatch). Standalone gets keyboard scroll-inset from the browser; embedded
-  // needs us to add it manually.
+  // mismatch). Embedded, the parent resizes the iframe to the visual viewport
+  // while the keyboard is open, so the pill hugs the iframe bottom; standalone
+  // it's lifted by the measured keyboard height instead.
   const [embedded, setEmbedded] = useState(false)
   useEffect(() => { setEmbedded(window.self !== window.top) }, [])
   // Keyboard height reported by the AIO parent (via postMessage) when this app is
@@ -54,17 +55,50 @@ export function RichEditor({ value, onChange }: { value: string; onChange: (html
     try { localStorage.setItem('notes_fmtbar_open', open ? '1' : '0') } catch { /* ignore */ }
   }
 
-  // Track the on-screen keyboard height. The pill anchors to the bottom and is
-  // lifted by `kb`, so its position doesn't depend on scroll offset or where in
-  // the note you tapped (which is what put it behind the keyboard before).
-  // Inside the AIO iframe our own VisualViewport may not shrink for the keyboard,
-  // so we fall back to the height the parent measures and postMessages in.
+  // Track the on-screen keyboard height.
+  // - Embedded: the AIO parent fits the iframe to the visual viewport while the
+  //   keyboard is open (the iframe always ends at the keyboard top), and sends
+  //   the real keyboard height via `aio-kb` — here it's only an "open?" signal.
+  // - Standalone: while the keyboard is open we lock the document into the
+  //   embedded scroll model (html[data-kb="1"] in globals.css) and fit the
+  //   shell to the visual viewport. The document then never scrolls/pans, so
+  //   the fixed pill tracks scrolling with zero lag and the inner scroller can
+  //   reach the whole note.
   useEffect(() => {
+    const scroller = () => document.querySelector('.notes-scroll') as HTMLElement | null
+    const syncStandaloneLock = (kbNow: number) => {
+      if (window.self !== window.top) return
+      const html = document.documentElement
+      const vv = window.visualViewport
+      const locked = html.dataset.kb === '1'
+      if (kbNow > 60) {
+        if (!locked) {
+          // Lock, carrying the document scroll position into the inner scroller.
+          const y = window.scrollY
+          html.dataset.kb = '1'
+          const sc = scroller()
+          if (sc) sc.scrollTop = y
+        }
+        if (vv) {
+          html.style.setProperty('--vvt', `${vv.offsetTop}px`)
+          html.style.setProperty('--vvh', `${vv.height}px`)
+        }
+      } else if (locked) {
+        // Unlock, carrying the scroll position back to the document.
+        const sc = scroller()
+        const y = sc ? sc.scrollTop : 0
+        delete html.dataset.kb
+        html.style.removeProperty('--vvt')
+        html.style.removeProperty('--vvh')
+        window.scrollTo(0, y)
+      }
+    }
     const measure = () => {
       const vv = window.visualViewport
       const inIframe = window.self !== window.top
       const ownKb = vv ? Math.max(0, window.innerHeight - vv.height - vv.offsetTop) : 0
       const kbNow = ownKb > 60 ? ownKb : (inIframe ? (parentKb.current ?? 0) : 0)
+      syncStandaloneLock(kbNow)
       setKb(prev => (Math.abs(prev - kbNow) > 1 ? kbNow : prev))
     }
     let ticking = false
@@ -86,6 +120,7 @@ export function RichEditor({ value, onChange }: { value: string; onChange: (html
       vv?.removeEventListener('scroll', schedule)
       window.removeEventListener('resize', schedule)
       window.removeEventListener('message', onMsg)
+      syncStandaloneLock(0)   // never leave the document locked on unmount
     }
   }, [])
 
@@ -216,7 +251,10 @@ export function RichEditor({ value, onChange }: { value: string; onChange: (html
           minHeight: 300, outline: 'none', color: N.text,
           fontFamily: N.font, fontSize: 16, lineHeight: 1.6,
           background: 'rgba(255,255,255,0.03)', border: `1px solid ${N.border}`,
-          borderRadius: 12, padding: `14px 16px ${96 + (embedded && kb > 60 ? kb : 0)}px`,
+          // 96px base clearance for the floating pill. No keyboard inset needed
+          // any more: with the keyboard open the scroll container ends at the
+          // keyboard top in BOTH modes (parent-resized iframe / data-kb lock).
+          borderRadius: 12, padding: '14px 16px 96px',
           ['--na-link' as string]: noteA('ff'),
         } as React.CSSProperties}
       />
@@ -228,17 +266,20 @@ export function RichEditor({ value, onChange }: { value: string; onChange: (html
         style={{
           position: 'fixed',
           left: '50%',
-          // Anchored to the bottom, lifted above the keyboard by `kb`. When the
-          // keyboard is closed, sit just above the home indicator (env inset, or
+          // Keyboard open:
+          //  - embedded: the AIO parent has resized the iframe to end exactly at
+          //    the keyboard top, so the pill just hugs the iframe bottom.
+          //  - standalone: the document is locked (html[data-kb="1"]) so the
+          //    layout viewport never scrolls; lift by the keyboard height.
+          // Keyboard closed: sit just above the home indicator (env inset, or
           // the AIO-bridged --aio-safe-bottom inside the iframe).
+          // NO transition — it must track keyboard/viewport changes instantly.
           bottom: kb > 60
-            ? kb + 8
+            ? (embedded ? 8 : kb + 8)
             : 'calc(max(env(safe-area-inset-bottom), var(--aio-safe-bottom, 0px)) + 16px)',
           transform: 'translateX(-50%)',
           zIndex: 60,
           width: barOpen ? 'min(440px, calc(100vw - 12px))' : 'auto',
-          transition: 'bottom 0.18s ease',
-          willChange: 'bottom',
         }}
       >
         {barOpen ? (

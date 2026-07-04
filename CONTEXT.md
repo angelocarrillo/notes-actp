@@ -35,13 +35,9 @@ view AND edit.** It replaces the **Projects** card in the AIO dashboard.
   `.rich-editor`. **Paste** is forced to plain text so it inherits the note's
   styling. The formatting controls live in a **floating, centered pill** with two
   full-width rows (space-between, so it reads the same on mobile and desktop). It is
-  **pinned to the bottom of the visual viewport** — `pillRef.offsetHeight` +
-  VisualViewport `offsetTop/height` + a `ResizeObserver` compute `pillTop` so it is
-  *always* just above the on-screen keyboard, never behind it. Repositioning is
-  rAF-throttled with **no CSS transition** so it tracks scrolling instantly (no lag).
-  **Inside the AIO iframe** the VisualViewport API can't see the keyboard, so the AIO
-  `/notes` page measures it and `postMessage`s `{type:'aio-kb', kb}` into the iframe;
-  the editor listens for that and uses `parentKb` to stay above the keyboard. It can be **tucked
+  **pinned just above the on-screen keyboard** — see *Editor keyboard (RichEditor)*
+  under the Scroll model section for exactly how (it differs embedded vs standalone,
+  and both paths rely on the scroll container ending at the keyboard top). It can be **tucked
   away** to an "Aa" chip (persisted in `localStorage['notes_fmtbar_open']`) with a
   grow/shrink animation (`.pill-pop` in `globals.css`). Row 1 also has a **break-out**
   button (`detachBlock`) that toggles `data-detached` on the caret's block so a body
@@ -221,15 +217,35 @@ container. (The editor's keyboard bridge already works the same way via
 `aio-kb`; do **not** add container padding — it shifts the iframe coordinate
 frame and mis-positions the editor's format pill.)
 
-**Editor keyboard (RichEditor).** The format pill is **anchored to the bottom**
-and lifted by the keyboard height `kb` (`bottom: kb + 8`), NOT positioned by a
-computed `top`. A `top`-based calc depended on `visualViewport.offsetTop`, which
-shifts when you tap near the bottom of the note — that put the pill *behind* the
-keyboard. Bottom-anchoring is position-independent. `kb` = the iframe's own
-`visualViewport` shrink when it reflects the keyboard (`ownKb > 60`), else the
-parent's `aio-kb` height. When embedded, the editor also adds a keyboard-height
-**bottom padding** to the contentEditable so its last lines scroll above the
-keyboard (standalone gets that inset from the browser automatically).
+**Editor keyboard (RichEditor).** Core insight from debugging on iOS: the pill is
+only ever rock-solid when **the document doesn't scroll and the app shell ends
+exactly at the keyboard top**. iOS doesn't resize the layout viewport for the
+keyboard — it shrinks the visual viewport and, when you tap low on the note,
+*pans* it (`visualViewport.offsetTop > 0`); any kb math that ignores the pan puts
+the pill behind the keyboard, and the panned-off top of the page becomes
+unreachable until the keyboard closes. iOS also un-pins `position:fixed` elements
+while a keyboard-open *document* scrolls (the standalone pill lag). So both modes
+now converge on the same model while the keyboard is open:
+
+- **Embedded**: the AIO `/notes` page fits its fixed container to the visual
+  viewport (`top = vv.offsetTop`, `height = vv.height`) whenever its measured
+  keyboard height (`innerHeight - vv.height`, toolbar-immune) is > 60px, so the
+  iframe always ends at the keyboard top. The `aio-kb` postMessage now carries
+  that true height and the editor uses it **only as an "open?" signal** — the
+  pill just hugs the iframe bottom (`bottom: 8`). No pan math in the iframe.
+- **Standalone**: while `kb > 60`, RichEditor sets `html[data-kb="1"]`
+  (globals.css), which locks the document into the embedded scroll model AND fits
+  `.note-shell` to the visual viewport via `--vvt`/`--vvh` (kept in sync on vv
+  resize/scroll). Scroll position is carried document ⇄ `.notes-scroll` on
+  lock/unlock. The document never scrolls/pans → the fixed pill
+  (`bottom: kb + 8`) tracks with **zero lag** and the whole note stays
+  scrollable. Unlocked on keyboard dismiss so Safari's toolbar-collapse
+  (needs a scrolling document) keeps working.
+
+The pill has **no CSS transition** on `bottom` (a transition = visible lag).
+The contentEditable keeps only its 96px base bottom padding (pill clearance) —
+no keyboard inset needed in either mode, since the scroll container ends at the
+keyboard top.
 
 **Scroll performance.** The decorative glow/grain layers in `NotePage` are
 `position: fixed` (not `absolute`). Standalone the document scrolls, and blurred/
@@ -287,6 +303,12 @@ the setup steps in the chat / README.)
 - **App-shell scroll model** (one inner `.notes-scroll` layer) — fixes iframe-only
   layering/scroll bugs on iOS: bottom-nav pill now stays pinned, and AIO's
   "Return to AIO" header no longer gets scrolled/clipped on the home screen.
+- **Keyboard-open viewport fitting (2026-07-03)** — fixes three iOS bugs: pill
+  behind the keyboard when tapping mid/bottom of a note in the AIO iframe,
+  limited scroll-up while the keyboard was open in the iframe, and pill lag when
+  scrolling standalone. AIO fits the iframe container to the visual viewport
+  while the keyboard is open; standalone locks into `html[data-kb="1"]` (see
+  *Editor keyboard (RichEditor)* above).
 
 ### Not yet done / ideas
 - Deploy to Vercel (needs GitHub repo + Vercel project; URL confirm).
