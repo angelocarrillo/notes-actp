@@ -11,7 +11,7 @@ consistent and share one Firebase project.
 - **Design system** — one shell component (`NotesShell`) holding design tokens + shared components (`Glass`, `PageHead`, `BottomNav`, etc.), mirroring `FitShell` / `AIOShell`.
 - **Liquid Glass material (iOS 26)** — glass surfaces use the shared `.liquid-glass` class in `globals.css`.
 - **Fonts** — Bebas Neue (headings), DM Sans (body), DM Mono (numbers) via Google Fonts.
-- **Navigation** — fixed pill nav with an animated morphing "blob" indicator (Notes · Shared · Settings), mounted persistently via `BottomNavWrapper`.
+- **Navigation** — fixed bottom pill holding a **search box + Settings button** (see *Search* below), mounted persistently via `BottomNavWrapper`. There is no more Notes/Shared/Settings tab bar — Home is the only list view, reached via its back arrow, and Settings is the pill's trailing icon button.
 - **Backend** — shared Firebase project (Firestore + Auth); Google Sign-in. Data is real-time via `onSnapshot`.
 - **Quality gate** — `npx tsc --noEmit` must pass before every commit.
 
@@ -22,8 +22,16 @@ down notes, organize them into folders, and start notes from templates. **Indivi
 notes can be shared with other people by their Google email — shared recipients can
 view AND edit.** It replaces the **Projects** card in the AIO dashboard.
 
+The whole editing surface is deliberately **low-chrome / freeform** — closer to a
+blank whiteboard than a form. Structured fields use an underline instead of a
+boxed card (`inputSx` in the editor page), "Add row" controls are plain text
+rows (no dashed box), and the Blank Note page has no card around it at all. See
+*Freeform styling* below for the full list of what changed and why.
+
 ### Note types (templates)
-- **Blank Note** — a **rich-text** page (`body` stores HTML). Editor is
+- **Blank Note** — a **rich-text** page (`body` stores HTML), rendered as a
+  **borderless, cardless page** (no background box, no border — just text on
+  the note page background, iOS-Notes style). Editor is
   `app/components/RichEditor.tsx` (contentEditable + `document.execCommand`, no
   external libs). Supports: **Title/Heading/Subheading/Body** blocks (H1/H2/H3/P),
   **bold/italic/underline/strikethrough**, **auto-bullets** when a line starts with
@@ -32,7 +40,10 @@ view AND edit.** It replaces the **Projects** card in the AIO dashboard.
   heading's ▾ gutter chevron to hide everything under it until the next
   same-or-higher heading (state saved via `data-collapsed`). Styling for headings,
   chevrons, lists, links, and the placeholder lives in `globals.css` under
-  `.rich-editor`. **Paste** is forced to plain text so it inherits the note's
+  `.rich-editor`. Heading sizes were toned down (h1 30→24px, h2 21→18px) for a
+  quieter hierarchy; **body text stays at the 16px floor** (see *Freeform
+  styling*) — it isn't sized down further because Safari auto-zooms a focused
+  editable below 16px. **Paste** is forced to plain text so it inherits the note's
   styling. The formatting controls live in a **floating, centered pill** with two
   full-width rows (space-between, so it reads the same on mobile and desktop). It is
   **pinned just above the on-screen keyboard** — see *Editor keyboard (RichEditor)*
@@ -43,15 +54,41 @@ view AND edit.** It replaces the **Projects** card in the AIO dashboard.
   button (`detachBlock`) that toggles `data-detached` on the caret's block so a body
   paragraph can be excluded from its heading's collapse group (styled with an accent
   left border). Links open on a plain tap.
-- **To-Do List** — checklist rows (`items[]` with `done`), tap to complete. Each row
-  can carry an optional **due date** (stored in `item.date`); the row shows a colored
-  Overdue / Due today / Due in Nd chip.
+- **To-Do List** — a flat, borderless checklist (`items[]` with `done`), tap to
+  complete. **Press Enter** in a row to insert a new item right after it and
+  focus it (`insertAfter` in `ChecklistEditor`); **Backspace on an empty row**
+  deletes it and moves focus to the previous row — the iOS Notes/Reminders
+  checklist feel. Items default to **no due date**; each row has a small,
+  muted calendar-icon affordance (`DueChip`) as the "subtle way to add a due
+  date" — tapping it opens the native date picker inline, no dialog. Once a
+  date is set, items that **share the same due date auto-cluster** under one
+  small date heading below the undated list (grouping is automatic — there's no
+  manual "create a group" step, just set the same date on a few items and
+  they'll land together, sorted soonest-first).
 - **Grocery List** — checklist grouped by aisle/category (`items[]` with `category` from `GROCERY_CATEGORIES`).
 - **Project Timeline** — milestone rows with a target `date` and done state.
 - **Meal Plan** — weekly grid, 7 days × Breakfast/Lunch/Dinner (`items[]` keyed by `day` + `slot`).
 
 Every structured note also has a freeform **Notes** field (`body`) at the bottom
-(plain textarea; only Blank notes use the rich editor for `body`).
+(borderless auto-growing textarea; only Blank notes use the rich editor for `body`).
+
+### Freeform styling (2026-07-12)
+The note editor page (`app/note/[noteId]/page.tsx`) and `RichEditor.tsx` were
+stripped of card/box chrome to feel like a boundless canvas rather than a form:
+- `inputSx` (shared by Grocery/Timeline/Meal text + date fields, and the Share
+  sheet's email input) is now a **bottom-underline field**, not a bordered box:
+  `background: transparent; border: none; border-bottom: 1px solid`.
+- `AddRowBtn` ("Add item" / "Add milestone" / …) lost its dashed-border box —
+  it's now a plain muted text row.
+- `AutoTextarea` (the freeform Notes field under structured note types) lost its
+  background + border box — transparent, just padding.
+- `RichEditor`'s contentEditable lost its background + border box entirely —
+  transparent, inherits the note page's own padding instead of adding its own.
+- The Grocery category `<select>` matches the new underline style.
+- **Scope**: this applies to note *content* editors. The Home list (`NoteCard`,
+  a `Glass` card), the `/new` template picker, and Settings still use the
+  Liquid Glass card style — those are navigation chrome, not note content, and
+  stay legible as a scannable list/menu.
 
 ### Due dates
 `item.date` (yyyy-mm-dd) is a **due date** on To-Do items and a **milestone date**
@@ -62,14 +99,30 @@ on the folder input in the editor (`ownedNotesQuery` gathers the user's folders)
 
 ## Pages / routes
 ```
-/                  Home — my notes, folder filter pills, + New
+/                  Home — my notes AND notes shared with me, folder filter pills,
+                   search (via the bottom pill), + New
 /new               Template picker → creates a note, redirects to /note/[id]
 /note/[noteId]     Full-screen editor (all 5 types), autosave, Share, Delete
-/shared            Notes other people shared with my Google account
+/shared            Redirects to / — kept only so old links/bookmarks don't 404
 /settings          Account, accent color picker, sign out
 ```
-The bottom nav (Notes · Shared · Settings) is hidden on `/note/[...]` so the editor
-gets the full screen.
+The bottom pill (search + Settings) is hidden on `/note/[...]` so the editor gets
+the full screen.
+
+### Search
+The bottom pill's search box (`BottomNav` in `NotesShell.tsx` — name kept from
+the old tab-bar component to avoid touching `BottomNavWrapper.tsx`, but it's a
+search box now, not tabs) is the **single always-mounted search input**,
+connected to the Home page via a small React context (`SearchContext.tsx`,
+provided in `layout.tsx`) since the pill and Home are separate components under
+the root layout. Typing while on any other route (`/new`, `/settings`, the
+redirecting `/shared`) immediately routes to `/` so results are visible.
+`noteMatchesSearch(note, query)` in `lib/notes.ts` matches **title, the note's
+Folder (doubles as its one "tag"), the freeform body (HTML-stripped), and every
+checklist/timeline/meal item's text** — i.e. anything a person would think of as
+"the note's content". There's no separate multi-tag field; Folder was chosen as
+the tag for search to avoid a schema change (decision made 2026-07-12 — revisit
+if a note ever needs more than one tag).
 
 ## Data model — top-level `notes` collection
 
@@ -108,9 +161,11 @@ index entirely.)
 
 ### Sharing
 `shareNote(id, email)` adds a lowercased email to `sharedWith` (`arrayUnion`);
-`unshareNote` removes it (`arrayRemove`). Recipients find the note under **Shared**
-(matched by their Google email) and can edit it. Only the **owner** sees the Share
-and Delete controls; recipients see a "Shared with you" tag.
+`unshareNote` removes it (`arrayRemove`). Recipients find the note **on Home**,
+mixed in with their own notes (matched by their Google email) — `NoteCard` gets
+an `isOwner` prop and shows a **"Shared" tag** instead of the share-count badge
+when the viewer isn't the owner. Only the **owner** sees the Share and Delete
+controls in the editor; recipients see a "Shared with you" tag there too.
 
 ### Editor autosave + concurrent edits
 The editor keeps a local working copy and **debounces saves (650ms)** via
@@ -173,7 +228,9 @@ and Settings also writes `users/{uid}/prefs/notesAccent` so the accent syncs ins
 the AIO iframe (where third-party localStorage is blocked).
 
 Shared components: `NotePage`, `Glass`, `PageHead`, `SectionLbl`, `StatPill`,
-`AddBtn`, `PillBtn`, `BottomNav`. Card component: `app/components/NoteCard.tsx`.
+`AddBtn`, `PillBtn`, `BottomNav` (now the search+Settings pill — see *Search*).
+Card component: `app/components/NoteCard.tsx`. Search state:
+`app/components/SearchContext.tsx`.
 
 ### Scroll model — app shell, one inner scroll layer (iOS/iframe safe)
 The scroll model is **conditional on embedding**, driven by `data-embedded="1"`
@@ -265,21 +322,22 @@ since iOS ignores the viewport `maximum-scale`/`user-scalable` hints.
 ## Key files
 ```
 app/
-  layout.tsx                    # AuthGate + persistent BottomNavWrapper
-  page.tsx                      # Home (my notes + folder filter)
+  layout.tsx                    # AuthGate + SearchProvider + persistent BottomNavWrapper
+  page.tsx                      # Home (owned + shared notes merged, folder filter, search)
   new/page.tsx                  # Template picker
   note/[noteId]/page.tsx        # Editor (all types) + Share sheet + delete
-  shared/page.tsx               # Notes shared with me
+  shared/page.tsx               # Redirects to / (route kept for old links only)
   settings/page.tsx             # Account, accent, sign out
   components/
-    NotesShell.tsx              # Design system (tokens + components + BottomNav)
-    NoteCard.tsx                # Note list card
+    NotesShell.tsx              # Design system (tokens + components + BottomNav search pill)
+    NoteCard.tsx                # Note list card (isOwner prop → "Shared" tag)
+    SearchContext.tsx           # Global search-query context (pill ⇄ Home)
     AuthGate.tsx                # Google sign-in (+ ?token= silent sign-in)
-    BottomNavWrapper.tsx        # Mounts nav; hides on /note/*; syncs accent
-  globals.css                   # Fonts + Liquid Glass + no-zoom rules
+    BottomNavWrapper.tsx        # Mounts the pill; hides on /note/*; syncs accent
+  globals.css                   # Fonts + Liquid Glass + no-zoom rules + rich-editor type sizes
 lib/
   firebase.ts                   # Firebase init (shared config)
-  notes.ts                      # Note types, queries, CRUD, sharing helpers
+  notes.ts                      # Note types, queries, CRUD, sharing helpers, noteMatchesSearch
   templates.ts                  # Template defs + seedNote()
   useModalLock.ts               # Ref-counted body[data-modal] (hides nav)
 ```
@@ -293,11 +351,20 @@ the setup steps in the chat / README.)
 
 ## Current status
 ### Built
-- Full app: Home, template picker, editor for all 5 note types, Shared, Settings.
-- Folder organization (free-text folder + Home filter pills).
-- Share individual notes by Google email (view + edit); Shared tab for recipients.
+- Full app: Home (owned + shared notes merged), template picker, editor for all
+  5 note types, Settings.
+- Folder organization (free-text folder + Home filter pills); folder also
+  doubles as the note's searchable "tag".
+- Share individual notes by Google email (view + edit); shared notes appear on
+  Home with a "Shared" tag.
+- Search (title / body / folder / item text) via the bottom pill.
 - Debounced autosave with idle remote-sync.
-- Accent theming; Liquid Glass design system ported from FitShell.
+- Accent theming; Liquid Glass design system ported from FitShell (kept for
+  navigation chrome — Home cards, template picker, Settings — see *Freeform
+  styling*).
+- Freeform, low-chrome note editors (Blank Note is a borderless page; To-Do is
+  a flat Enter-to-add checklist with auto-clustering due dates; structured
+  fields use an underline instead of a boxed card).
 - AIO integration: Projects tile → Notes, `/notes` iframe route + token.
 
 ### Added later
@@ -305,7 +372,7 @@ the setup steps in the chat / README.)
 - **Folder suggestions** (datalist of existing folders) in the note editor.
 - **Due dates** on To-Do items; due dates + Timeline milestones surfaced on the AIO dashboard.
 - **App-shell scroll model** (one inner `.notes-scroll` layer) — fixes iframe-only
-  layering/scroll bugs on iOS: bottom-nav pill now stays pinned, and AIO's
+  layering/scroll bugs on iOS: bottom pill now stays pinned, and AIO's
   "Return to AIO" header no longer gets scrolled/clipped on the home screen.
 - **Keyboard-open viewport fitting (2026-07-03)** — fixes three iOS bugs: pill
   behind the keyboard when tapping mid/bottom of a note in the AIO iframe,
@@ -313,8 +380,18 @@ the setup steps in the chat / README.)
   scrolling standalone. AIO fits the iframe container to the visual viewport
   while the keyboard is open; standalone locks into `html[data-kb="1"]` (see
   *Editor keyboard (RichEditor)* above).
+- **Merged Shared into Home + search pill + freeform note editors (2026-07-12)**
+  — Home now shows owned + shared notes together (`isOwner` tag on the card);
+  `/shared` just redirects there. The old Notes/Shared/Settings tab bar was
+  replaced with a search box + Settings button (search covers title, body,
+  folder-as-tag, and item text — see *Search*). Blank Note lost its card
+  (borderless page, smaller headings) and the To-Do list became a flat,
+  Enter-to-add checklist with a subtle per-row due-date icon and automatic
+  same-date clustering. Grocery/Timeline/Meal fields and "Add row" buttons
+  switched from boxed cards to underlines/plain rows (see *Freeform styling*).
 
 ### Not yet done / ideas
 - Deploy to Vercel (needs GitHub repo + Vercel project; URL confirm).
 - Optional tighter Firestore rules for `notes` (see above).
-- Per-share view-only permission, live co-editing merge, note search, drag-reorder items.
+- Per-share view-only permission, live co-editing merge, drag-reorder items.
+- A real multi-tag field, if Folder-as-tag ever feels too limiting (see *Search*).

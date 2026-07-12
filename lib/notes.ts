@@ -135,6 +135,20 @@ export function isValidEmail(s: string): boolean {
   return EMAIL_RE.test(s.trim())
 }
 
+/** Does this note match a free-text search query? Checks title, folder
+ *  (doubles as the note's "tag"), the freeform body, and structured item text —
+ *  i.e. everything a person would think of as "the note's content". */
+export function noteMatchesSearch(n: Note, rawQuery: string): boolean {
+  const q = rawQuery.trim().toLowerCase()
+  if (!q) return true
+  if (n.title.toLowerCase().includes(q)) return true
+  if (n.folder.toLowerCase().includes(q)) return true
+  const bodyText = n.body.replace(/<[^>]*>/g, ' ').replace(/&nbsp;/g, ' ').toLowerCase()
+  if (bodyText.includes(q)) return true
+  if (n.items.some(i => i.text.toLowerCase().includes(q))) return true
+  return false
+}
+
 /** One-line summary for a note card (progress / count depending on type). */
 export function noteSummary(n: Note): string {
   switch (n.type) {

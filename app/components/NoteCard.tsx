@@ -35,8 +35,8 @@ function TypeIcon({ path, color }: { path: string; color: string }) {
   )
 }
 
-export function NoteCard({ note, onClick, subtitle }: {
-  note: Note; onClick: () => void; subtitle?: string
+export function NoteCard({ note, onClick, subtitle, isOwner = true }: {
+  note: Note; onClick: () => void; subtitle?: string; isOwner?: boolean
 }) {
   const tpl    = templateByType(note.type)
   const shared = note.sharedWith?.length ?? 0
@@ -99,12 +99,20 @@ export function NoteCard({ note, onClick, subtitle }: {
             </span>
           )
         })()}
-        {shared > 0 && (
+        {isOwner && shared > 0 && (
           <span style={{ fontSize: 10, color: noteA('cc'), display: 'flex', alignItems: 'center', gap: 3 }}>
             <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
               <circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><path d="M8.6 13.5l6.8 3.9M15.4 6.6l-6.8 3.9"/>
             </svg>
             {shared}
+          </span>
+        )}
+        {!isOwner && (
+          <span style={{ fontSize: 10, color: noteA('cc'), display: 'flex', alignItems: 'center', gap: 3 }}>
+            <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+              <circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><path d="M8.6 13.5l6.8 3.9M15.4 6.6l-6.8 3.9"/>
+            </svg>
+            Shared
           </span>
         )}
         <span style={{ marginLeft: 'auto', fontSize: 10, color: N.textDim, fontFamily: N.mono }}>

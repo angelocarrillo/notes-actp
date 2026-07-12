@@ -2,6 +2,7 @@ import type { Metadata, Viewport } from 'next'
 import './globals.css'
 import AuthGate from './components/AuthGate'
 import BottomNavWrapper from './components/BottomNavWrapper'
+import { SearchProvider } from './components/SearchContext'
 
 export const metadata: Metadata = {
   title: 'Notes',
@@ -30,8 +31,10 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
           }}
         />
         <AuthGate>
-          {children}
-          <BottomNavWrapper />
+          <SearchProvider>
+            {children}
+            <BottomNavWrapper />
+          </SearchProvider>
         </AuthGate>
       </body>
     </html>

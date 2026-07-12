@@ -209,8 +209,11 @@ input.input-lg, textarea.input-lg { font-size: 26px !important; }
   position: relative; padding-left: 22px; margin: 0.7em 0 0.3em;
   line-height: 1.25;
 }
-.rich-editor h1 { font-family: "Bebas Neue", sans-serif; font-size: 30px; letter-spacing: 0.02em; font-weight: 400; }
-.rich-editor h2 { font-size: 21px; font-weight: 700; }
+/* Sized up from the 16px body floor (not down) — Safari auto-zooms a focused
+   editable if any of its text drops below 16px, so h3 stays at the floor and
+   h1/h2 are toned down from their old (30/21px) sizes for a quieter hierarchy. */
+.rich-editor h1 { font-family: "Bebas Neue", sans-serif; font-size: 24px; letter-spacing: 0.02em; font-weight: 400; }
+.rich-editor h2 { font-size: 18px; font-weight: 700; }
 .rich-editor h3 { font-size: 16px; font-weight: 600; color: rgba(255,255,255,0.85); }
 
 /* Collapse chevron in the heading gutter */

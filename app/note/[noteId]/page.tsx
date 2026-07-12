@@ -1,5 +1,5 @@
 'use client'
-import { useEffect, useRef, useState, use } from 'react'
+import { useEffect, useMemo, useRef, useState, use } from 'react'
 import { useRouter } from 'next/navigation'
 import { doc, onSnapshot } from 'firebase/firestore'
 import { db } from '@/lib/firebase'
@@ -13,10 +13,13 @@ import {
 } from '@/lib/notes'
 import { templateByType, GROCERY_CATEGORIES, WEEKDAYS, MEAL_SLOTS } from '@/lib/templates'
 
+// Freeform, low-chrome field style used across the structured note editors —
+// an underline instead of a boxed card, so a list of fields reads as plain
+// rows on the page rather than a stack of boxes.
 const inputSx: React.CSSProperties = {
-  width: '100%', background: 'rgba(255,255,255,0.05)',
-  border: `1px solid ${N.border}`, borderRadius: 10,
-  padding: '10px 12px', color: N.text, fontFamily: N.font,
+  width: '100%', background: 'transparent',
+  border: 'none', borderBottom: `1px solid ${N.border}`, borderRadius: 0,
+  padding: '8px 2px', color: N.text, fontFamily: N.font,
   outline: 'none', boxSizing: 'border-box',
 }
 
@@ -201,7 +204,7 @@ export default function NoteEditorPage({ params }: { params: Promise<{ noteId: s
 
         {/* Type-specific editor */}
         {note.type === 'blank'    && <RichEditor value={note.body} onChange={b => patchNote({ body: b })} />}
-        {note.type === 'todo'     && <ChecklistEditor note={note} onUpdate={updateItem} onRemove={removeItem} onAdd={() => addItem({ done: false })} />}
+        {note.type === 'todo'     && <ChecklistEditor note={note} onUpdate={updateItem} onRemove={removeItem} onSetItems={setItems} />}
         {note.type === 'grocery'  && <GroceryEditor note={note} onUpdate={updateItem} onRemove={removeItem} onAdd={cat => addItem({ done: false, category: cat })} />}
         {note.type === 'timeline' && <TimelineEditor note={note} onUpdate={updateItem} onRemove={removeItem} onAdd={() => addItem({ done: false, date: '' })} />}
         {note.type === 'meal'     && <MealEditor note={note} onUpdate={updateItem} onAdd={(day, slot) => addItem({ day, slot })} />}
@@ -246,8 +249,8 @@ function AutoTextarea({ value, onChange, placeholder, minHeight = 200 }: {
       onChange={e => onChange(e.target.value)}
       placeholder={placeholder}
       style={{
-        width: '100%', background: 'rgba(255,255,255,0.04)', border: `1px solid ${N.border}`,
-        borderRadius: 12, padding: 14, color: N.text, fontFamily: N.font,
+        width: '100%', background: 'transparent', border: 'none',
+        padding: '4px 0', color: N.text, fontFamily: N.font,
         lineHeight: 1.55, resize: 'none', outline: 'none', boxSizing: 'border-box',
         minHeight,
       }}
@@ -280,8 +283,8 @@ function AddRowBtn({ label, onClick }: { label: string; onClick: () => void }) {
   return (
     <button onClick={onClick} style={{
       display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer',
-      background: 'transparent', border: `1px dashed ${N.border}`, borderRadius: 10,
-      color: N.textMut, fontSize: 13, fontFamily: N.font, padding: '10px 12px', width: '100%',
+      background: 'transparent', border: 'none',
+      color: N.textMut, fontSize: 13, fontFamily: N.font, padding: '10px 2px', width: '100%',
     }}>
       <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 5v14M5 12h14"/></svg>
       {label}
@@ -289,60 +292,125 @@ function AddRowBtn({ label, onClick }: { label: string; onClick: () => void }) {
   )
 }
 
-// ─── Due-date control (To-Do rows) ────────────────────────────────────────────
+// ─── Due-date chip (To-Do rows) ────────────────────────────────────────────────
+// Compact, single-line: a muted calendar icon when there's no date (the
+// "subtle way to add a due date"), or a small colored label once one is set.
+// No boxed input — the native date picker is an invisible overlay on the label.
 const DUE_COLOR: Record<DueLevel, string> = {
   overdue: N.warn, today: '#f0b429', soon: '#f0b429', later: N.textSec,
 }
-function DueControl({ value, done, onChange }: { value?: string; done?: boolean; onChange: (d: string) => void }) {
+function DueChip({ value, done, onChange }: { value?: string; done?: boolean; onChange: (d: string) => void }) {
   const info = dueInfo(value, done)
   const coverInput: React.CSSProperties = { position: 'absolute', inset: 0, opacity: 0, cursor: 'pointer' }
   if (!value) {
     return (
-      <label style={{ position: 'relative', display: 'inline-flex', alignItems: 'center', gap: 6, cursor: 'pointer', color: N.textMut, fontSize: 12 }}>
-        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></svg>
-        Add due date
+      <label style={{ position: 'relative', display: 'flex', alignItems: 'center', color: N.textDim, cursor: 'pointer', flexShrink: 0, padding: 4 }} title="Add due date">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></svg>
         <input type="date" value="" onChange={e => onChange(e.target.value)} style={coverInput} />
       </label>
     )
   }
   const color = info ? DUE_COLOR[info.level] : N.textMut
   return (
-    <div style={{ display: 'inline-flex', alignItems: 'center', gap: 8 }}>
-      <label style={{ position: 'relative', display: 'inline-flex', alignItems: 'center', gap: 5, color, fontSize: 12, cursor: 'pointer' }}>
-        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></svg>
-        <span style={{ fontWeight: 600 }}>{info ? info.label : 'Done'}</span>
+    <div style={{ display: 'flex', alignItems: 'center', gap: 3, flexShrink: 0 }}>
+      <label style={{ position: 'relative', display: 'flex', alignItems: 'center', gap: 4, color, fontSize: 11, fontWeight: 600, cursor: 'pointer', whiteSpace: 'nowrap' }}>
+        {info ? info.label : 'Done'}
         <input type="date" value={value} onChange={e => onChange(e.target.value)} style={coverInput} />
       </label>
-      <button onClick={() => onChange('')} aria-label="Clear due date" style={{ background: 'none', border: 'none', color: N.textDim, cursor: 'pointer', fontSize: 12, padding: 0, lineHeight: 1 }}>✕</button>
+      <button onClick={() => onChange('')} aria-label="Clear due date" style={{ background: 'none', border: 'none', color: N.textDim, cursor: 'pointer', fontSize: 11, padding: 2, lineHeight: 1 }}>✕</button>
     </div>
   )
 }
 
 // ─── To-Do checklist ──────────────────────────────────────────────────────────
-function ChecklistEditor({ note, onUpdate, onRemove, onAdd }: {
-  note: Note; onUpdate: (id: string, p: Partial<NoteItem>) => void; onRemove: (id: string) => void; onAdd: () => void
+// A flat, borderless list. Enter on a row creates a new item right after it and
+// focuses it; Backspace on an empty row deletes it and moves focus up — the
+// same feel as iOS Notes / Reminders checklists. Items default to no due date;
+// once several items share the same date they automatically cluster together
+// under one small date heading instead of each repeating it.
+function ChecklistEditor({ note, onUpdate, onRemove, onSetItems }: {
+  note: Note
+  onUpdate: (id: string, p: Partial<NoteItem>) => void
+  onRemove: (id: string) => void
+  onSetItems: (items: NoteItem[]) => void
 }) {
   const accent = templateByType('todo').accent
+  const inputRefs = useRef<Record<string, HTMLInputElement | null>>({})
+  const focusNext = useRef<string | null>(null)
+
+  useEffect(() => {
+    if (focusNext.current) {
+      inputRefs.current[focusNext.current]?.focus()
+      focusNext.current = null
+    }
+  })
+
+  const insertAfter = (afterId: string | null) => {
+    const items = note.items.slice()
+    const id = itemId()
+    const at = afterId ? items.findIndex(i => i.id === afterId) + 1 : items.length
+    items.splice(at, 0, { id, text: '', done: false })
+    focusNext.current = id
+    onSetItems(items)
+  }
+
+  const removeAndFocusPrev = (id: string) => {
+    const items = note.items
+    const idx = items.findIndex(i => i.id === id)
+    if (items.length <= 1) return   // keep at least one row
+    const prev = items[idx - 1]
+    if (prev) focusNext.current = prev.id
+    onSetItems(items.filter(i => i.id !== id))
+  }
+
+  const undated = note.items.filter(i => !i.date)
+  const groups  = useMemo(() => {
+    const map = new Map<string, NoteItem[]>()
+    note.items.forEach(i => { if (i.date) map.set(i.date, [...(map.get(i.date) ?? []), i]) })
+    return Array.from(map.entries()).sort(([a], [b]) => a.localeCompare(b))
+  }, [note.items])
+
+  const row = (it: NoteItem) => (
+    <div key={it.id} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '3px 0' }}>
+      <Check on={!!it.done} color={accent} onClick={() => onUpdate(it.id, { done: !it.done })} />
+      <input
+        ref={el => { inputRefs.current[it.id] = el }}
+        value={it.text}
+        onChange={e => onUpdate(it.id, { text: e.target.value })}
+        onKeyDown={e => {
+          if (e.key === 'Enter') { e.preventDefault(); insertAfter(it.id) }
+          else if (e.key === 'Backspace' && it.text === '') { e.preventDefault(); removeAndFocusPrev(it.id) }
+        }}
+        placeholder="List item"
+        style={{
+          flex: 1, minWidth: 0, background: 'transparent', border: 'none', outline: 'none',
+          padding: '6px 0', fontFamily: N.font, fontSize: 16,
+          textDecoration: it.done ? 'line-through' : 'none', color: it.done ? N.textMut : N.text,
+        }}
+      />
+      <DueChip value={it.date} done={it.done} onChange={d => onUpdate(it.id, { date: d })} />
+      <RowDelete onClick={() => onRemove(it.id)} />
+    </div>
+  )
+
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-      {note.items.map(it => (
-        <div key={it.id} style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-            <Check on={!!it.done} color={accent} onClick={() => onUpdate(it.id, { done: !it.done })} />
-            <input
-              value={it.text}
-              onChange={e => onUpdate(it.id, { text: e.target.value })}
-              placeholder="List item"
-              style={{ ...inputSx, textDecoration: it.done ? 'line-through' : 'none', color: it.done ? N.textMut : N.text }}
-            />
-            <RowDelete onClick={() => onRemove(it.id)} />
+    <div style={{ display: 'flex', flexDirection: 'column' }}>
+      <div style={{ display: 'flex', flexDirection: 'column' }}>
+        {undated.map(row)}
+      </div>
+      {groups.map(([date, items]) => {
+        const info  = dueInfo(date, false)
+        const color = info ? DUE_COLOR[info.level] : N.textMut
+        return (
+          <div key={date} style={{ marginTop: 14 }}>
+            <div style={{ fontSize: 10, letterSpacing: '0.18em', textTransform: 'uppercase', fontWeight: 700, color, marginBottom: 2 }}>
+              {info ? info.label : date}
+            </div>
+            {items.map(row)}
           </div>
-          <div style={{ paddingLeft: 32, position: 'relative' }}>
-            <DueControl value={it.date} done={it.done} onChange={d => onUpdate(it.id, { date: d })} />
-          </div>
-        </div>
-      ))}
-      <AddRowBtn label="Add item" onClick={onAdd} />
+        )
+      })}
+      <AddRowBtn label="Add item" onClick={() => insertAfter(note.items.length ? note.items[note.items.length - 1].id : null)} />
     </div>
   )
 }
@@ -375,7 +443,7 @@ function GroceryEditor({ note, onUpdate, onRemove, onAdd }: {
                 <select
                   value={it.category ?? 'Other'}
                   onChange={e => onUpdate(it.id, { category: e.target.value })}
-                  style={{ background: 'rgba(255,255,255,0.05)', border: `1px solid ${N.border}`, borderRadius: 10, color: N.textSec, padding: '8px 6px', fontFamily: N.font, maxWidth: 96 }}
+                  style={{ background: 'transparent', border: 'none', borderBottom: `1px solid ${N.border}`, borderRadius: 0, color: N.textSec, padding: '8px 4px', fontFamily: N.font, maxWidth: 96 }}
                 >
                   {GROCERY_CATEGORIES.map(c => <option key={c} value={c} style={{ background: '#16161a' }}>{c}</option>)}
                 </select>

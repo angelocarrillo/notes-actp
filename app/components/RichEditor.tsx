@@ -273,13 +273,18 @@ export function RichEditor({ value, onChange }: { value: string; onChange: (html
         style={{
           // 16px (not 15.5) so iOS doesn't zoom in when the editor is focused —
           // Safari auto-zooms any focused editable whose font-size is < 16px.
+          // This is the floor; everything else in the editor (headings included)
+          // is sized up from here, not down, to keep that invariant.
           minHeight: 300, outline: 'none', color: N.text,
-          fontFamily: N.font, fontSize: 16, lineHeight: 1.6,
-          background: 'rgba(255,255,255,0.03)', border: `1px solid ${N.border}`,
+          fontFamily: N.font, fontSize: 16, lineHeight: 1.5,
+          // No card — a blank, borderless page (iOS Notes-style). It inherits the
+          // note page's own left/right padding instead of carrying its own, so
+          // there's no visible boundary between "editor" and "page".
+          background: 'transparent', border: 'none',
           // 96px base clearance for the floating pill. No keyboard inset needed
           // any more: with the keyboard open the scroll container ends at the
           // keyboard top in BOTH modes (parent-resized iframe / data-kb lock).
-          borderRadius: 12, padding: '14px 16px 96px',
+          padding: '6px 0 96px',
           ['--na-link' as string]: noteA('ff'),
         } as React.CSSProperties}
       />
