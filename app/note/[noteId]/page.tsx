@@ -7,9 +7,10 @@ import { useUser } from '../../components/AuthGate'
 import { NotePage, N, noteA, PillBtn } from '../../components/NotesShell'
 import { useModalLock } from '@/lib/useModalLock'
 import { RichEditor } from '../../components/RichEditor'
+import { ShareSheet } from '../../components/ShareSheet'
 import {
-  updateNote, deleteNote, shareNote, unshareNote, ownedNotesQuery,
-  itemId, isValidEmail, dueInfo, type Note, type NoteItem, type DueLevel,
+  updateNote, deleteNote, ownedNotesQuery,
+  itemId, dueInfo, type Note, type NoteItem, type DueLevel,
 } from '@/lib/notes'
 import { templateByType, GROCERY_CATEGORIES, WEEKDAYS, MEAL_SLOTS } from '@/lib/templates'
 
@@ -168,7 +169,15 @@ export default function NoteEditorPage({ params }: { params: Promise<{ noteId: s
         )}
       </div>
 
-      <div style={{ padding: '4px 18px calc(env(safe-area-inset-bottom) + 60px)', maxWidth: 640, margin: '0 auto' }}>
+      <div style={{
+        padding: '4px 18px calc(env(safe-area-inset-bottom) + 60px)',
+        // Blank Note is a freeform "canvas" page — let it fill the window edge to
+        // edge (minus the 18px gutter) and reflow live as the window resizes,
+        // instead of being boxed into the structured editors' 640px column.
+        maxWidth: note.type === 'blank' ? 'none' : 640,
+        margin: '0 auto',
+        width: '100%', boxSizing: 'border-box',
+      }}>
         {/* Title */}
         <input
           className="input-lg"
@@ -518,79 +527,6 @@ function MealEditor({ note, onUpdate, onAdd }: {
           </div>
         </div>
       ))}
-    </div>
-  )
-}
-
-// ─── Share sheet ──────────────────────────────────────────────────────────────
-function ShareSheet({ note, onClose }: { note: Note; onClose: () => void }) {
-  const [email, setEmail] = useState('')
-  const [err, setErr]     = useState('')
-  const [busy, setBusy]   = useState(false)
-
-  const add = async () => {
-    const e = email.trim().toLowerCase()
-    if (!isValidEmail(e)) { setErr('Enter a valid email'); return }
-    if (note.sharedWith?.includes(e)) { setErr('Already shared with them'); return }
-    setBusy(true); setErr('')
-    try { await shareNote(note.id, e); setEmail('') }
-    catch { setErr('Could not share — try again') }
-    finally { setBusy(false) }
-  }
-
-  return (
-    <div onClick={onClose} style={{
-      position: 'fixed', inset: 0, zIndex: 200, display: 'flex', alignItems: 'flex-end', justifyContent: 'center',
-      background: 'rgba(0,0,0,0.55)', backdropFilter: 'blur(4px)', WebkitBackdropFilter: 'blur(4px)',
-    }}>
-      <div onClick={e => e.stopPropagation()} style={{
-        width: '100%', maxWidth: 460, background: '#131318',
-        borderTopLeftRadius: 22, borderTopRightRadius: 22,
-        border: `1px solid ${N.border}`, borderBottom: 'none',
-        padding: '20px 20px calc(env(safe-area-inset-bottom) + 24px)',
-      }}>
-        <div style={{ width: 38, height: 4, borderRadius: 2, background: N.borderHi, margin: '0 auto 16px' }} />
-        <div style={{ fontFamily: N.bebas, fontSize: 24, letterSpacing: '0.03em', marginBottom: 4 }}>Share note</div>
-        <p style={{ color: N.textMut, fontSize: 12.5, margin: '0 0 16px' }}>
-          Add someone by their Google email. They&apos;ll see it under <b style={{ color: N.textSec }}>Shared</b> and can view and edit it.
-        </p>
-
-        <div style={{ display: 'flex', gap: 8, marginBottom: err ? 6 : 14 }}>
-          <input
-            value={email}
-            onChange={e => { setEmail(e.target.value); setErr('') }}
-            onKeyDown={e => { if (e.key === 'Enter') add() }}
-            placeholder="name@gmail.com"
-            inputMode="email"
-            style={{ ...inputSx, flex: 1 }}
-          />
-          <button onClick={add} disabled={busy} className="lg-press" style={{
-            background: N.note, color: '#0a0a0c', border: 'none', borderRadius: 10,
-            padding: '0 18px', fontSize: 14, fontWeight: 700, fontFamily: N.font,
-            cursor: busy ? 'default' : 'pointer', opacity: busy ? 0.6 : 1,
-          }}>Add</button>
-        </div>
-        {err && <p style={{ color: N.warn, fontSize: 12, margin: '0 0 14px' }}>{err}</p>}
-
-        <div style={{ fontSize: 10, letterSpacing: '0.2em', textTransform: 'uppercase', color: N.textMut, margin: '4px 0 8px' }}>
-          Shared with {note.sharedWith?.length ? `(${note.sharedWith.length})` : ''}
-        </div>
-        {(!note.sharedWith || note.sharedWith.length === 0) ? (
-          <p style={{ color: N.textDim, fontSize: 13, margin: '0 0 8px' }}>Not shared with anyone yet.</p>
-        ) : (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 6, maxHeight: 220, overflowY: 'auto' }}>
-            {note.sharedWith.map(e => (
-              <div key={e} style={{ display: 'flex', alignItems: 'center', gap: 10, background: 'rgba(255,255,255,0.04)', border: `1px solid ${N.border}`, borderRadius: 10, padding: '9px 12px' }}>
-                <div style={{ width: 26, height: 26, borderRadius: '50%', flexShrink: 0, background: noteA('33'), color: N.text, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 12, fontWeight: 700, textTransform: 'uppercase' }}>{e[0]}</div>
-                <span style={{ flex: 1, minWidth: 0, fontSize: 13, color: N.textSec, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{e}</span>
-                <button onClick={() => unshareNote(note.id, e)} style={{ background: 'none', border: 'none', color: N.textMut, cursor: 'pointer', fontSize: 12, fontFamily: N.font }}>Remove</button>
-              </div>
-            ))}
-          </div>
-        )}
-
-        <button onClick={onClose} style={{ width: '100%', marginTop: 18, background: 'rgba(255,255,255,0.06)', border: `1px solid ${N.border}`, borderRadius: 12, padding: '12px', color: N.text, fontSize: 14, fontWeight: 600, fontFamily: N.font, cursor: 'pointer' }}>Done</button>
-      </div>
     </div>
   )
 }

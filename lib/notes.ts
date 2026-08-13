@@ -90,6 +90,19 @@ export async function deleteNote(id: string): Promise<void> {
   await deleteDoc(doc(db, 'notes', id))
 }
 
+/** Duplicate a note as a brand-new note owned by `uid` — items get fresh ids
+ *  (so editing the copy never mutates the original's array by reference) and
+ *  the copy starts unshared, even if the source note was shared with others. */
+export async function duplicateNote(uid: string, email: string, source: Note): Promise<string> {
+  return createNote(uid, email, {
+    title: source.title.trim() ? `${source.title.trim()} copy` : '',
+    type: source.type,
+    folder: source.folder,
+    body: source.body,
+    items: source.items.map(i => ({ ...i, id: itemId() })),
+  })
+}
+
 /** Share a note with someone by their Google email (view + edit). */
 export async function shareNote(id: string, email: string): Promise<void> {
   await updateDoc(doc(db, 'notes', id), {

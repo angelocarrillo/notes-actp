@@ -99,31 +99,113 @@ interface GlassProps {
   accent?: string
   style?: React.CSSProperties
   onClick?: () => void
+  // Long-press support (see useLongPress below) — passed straight through so a
+  // card can be tap-and-hold interactive without Glass knowing the details.
+  onPointerDown?: (e: React.PointerEvent<HTMLDivElement>) => void
+  onPointerUp?: (e: React.PointerEvent<HTMLDivElement>) => void
+  onPointerCancel?: (e: React.PointerEvent<HTMLDivElement>) => void
+  onContextMenu?: (e: React.MouseEvent<HTMLDivElement>) => void
+  onLongPressMove?: (e: React.PointerEvent<HTMLDivElement>) => void
+  /** Disable iOS text selection / copy-callout while the card is held — use
+   *  for anything with press-and-hold behavior (e.g. NoteCard's long-press menu),
+   *  so holding it opens the menu instead of highlighting the card's text. */
+  noSelect?: boolean
 }
-export function Glass({ children, p = 16, accent, style, onClick }: GlassProps) {
-  const interactive = !!onClick
+export function Glass({
+  children, p = 16, accent, style, onClick,
+  onPointerDown, onPointerUp, onPointerCancel, onContextMenu, onLongPressMove, noSelect,
+}: GlassProps) {
+  const interactive = !!onClick || !!onPointerDown
   const onPointerMove = interactive
     ? (e: React.PointerEvent<HTMLDivElement>) => {
         const r = e.currentTarget.getBoundingClientRect()
         e.currentTarget.style.setProperty('--lg-mx', `${((e.clientX - r.left) / r.width) * 100}%`)
         e.currentTarget.style.setProperty('--lg-my', `${((e.clientY - r.top) / r.height) * 100}%`)
+        onLongPressMove?.(e)
       }
     : undefined
   return (
     <div
       onClick={onClick}
+      onPointerDown={onPointerDown}
+      onPointerUp={onPointerUp}
+      onPointerCancel={onPointerCancel}
+      onContextMenu={onContextMenu}
       onPointerMove={onPointerMove}
       className={`liquid-glass${interactive ? ' lg-interactive' : ''}`}
       style={{
         borderRadius: 16,
         padding: p,
         ...(accent ? { ['--lg-accent' as string]: accent + '30' } : {}),
+        ...(noSelect ? { WebkitTouchCallout: 'none', WebkitUserSelect: 'none', userSelect: 'none' } : {}),
         ...style,
       } as React.CSSProperties}
     >
       {children}
     </div>
   )
+}
+
+// ─── useLongPress — hold-to-open, tap-to-navigate, no accidental text select ──
+// Driven entirely by pointer events rather than the browser's synthetic click,
+// so a long-press never also fires a tap right after (a real risk on iOS,
+// where touchend still dispatches click unless something upstream prevents
+// it). Pair with `noSelect` on Glass so the hold shows the actions menu
+// instead of iOS's text-selection handles / copy-lookup callout.
+interface LongPressHandlers {
+  onPointerDown: (e: React.PointerEvent<HTMLElement>) => void
+  onPointerMove: (e: React.PointerEvent<HTMLElement>) => void
+  onPointerUp: (e: React.PointerEvent<HTMLElement>) => void
+  onPointerCancel: (e: React.PointerEvent<HTMLElement>) => void
+  onContextMenu: (e: React.MouseEvent<HTMLElement>) => void
+}
+export function useLongPress(onLongPress: () => void, onTap?: () => void, delay = 480): LongPressHandlers {
+  const timer = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const start = useRef<{ x: number; y: number } | null>(null)
+  const fired = useRef(false)
+  const moved = useRef(false)
+
+  const clear = () => { if (timer.current) { clearTimeout(timer.current); timer.current = null } }
+
+  const onPointerDown = (e: React.PointerEvent<HTMLElement>) => {
+    if (e.pointerType === 'mouse' && e.button !== 0) return   // right/middle click → onContextMenu instead
+    fired.current = false
+    moved.current = false
+    start.current = { x: e.clientX, y: e.clientY }
+    clear()
+    timer.current = setTimeout(() => {
+      fired.current = true
+      timer.current = null
+      try { navigator.vibrate?.(12) } catch { /* not supported — fine */ }
+      onLongPress()
+    }, delay)
+  }
+
+  const onPointerMove = (e: React.PointerEvent<HTMLElement>) => {
+    if (!start.current || moved.current) return
+    const dx = e.clientX - start.current.x
+    const dy = e.clientY - start.current.y
+    // Past this, treat it as a scroll/drag, not a hold — cancel the timer AND
+    // suppress the tap-on-release below (otherwise releasing after a scroll
+    // drag would incorrectly navigate into the note).
+    if (Math.hypot(dx, dy) > 10) { clear(); moved.current = true }
+  }
+
+  const onPointerUp = () => {
+    const wasLongPress = fired.current
+    clear()
+    if (!wasLongPress && !moved.current) onTap?.()
+    fired.current = false
+  }
+
+  const onPointerCancel = () => { clear(); fired.current = false }
+
+  const onContextMenu = (e: React.MouseEvent<HTMLElement>) => {
+    e.preventDefault()   // desktop right-click opens the same menu, not the native one
+    if (!fired.current) { fired.current = true; onLongPress() }
+  }
+
+  return { onPointerDown, onPointerMove, onPointerUp, onPointerCancel, onContextMenu }
 }
 
 // ─── PageHead — eyebrow + Bebas title + optional back + trailing slot ─────────

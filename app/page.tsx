@@ -6,7 +6,10 @@ import { useUser } from './components/AuthGate'
 import { NotePage, PageHead, AddBtn, SectionLbl, N, noteA } from './components/NotesShell'
 import { useSearch } from './components/SearchContext'
 import { NoteCard } from './components/NoteCard'
-import { ownedNotesQuery, sharedNotesQuery, sortByUpdated, noteMatchesSearch, type Note } from '@/lib/notes'
+import { NoteActionsSheet } from './components/NoteActionsSheet'
+import { ShareSheet } from './components/ShareSheet'
+import { useModalLock } from '@/lib/useModalLock'
+import { ownedNotesQuery, sharedNotesQuery, sortByUpdated, noteMatchesSearch, deleteNote, duplicateNote, type Note } from '@/lib/notes'
 
 export default function HomePage() {
   const user   = useUser()
@@ -18,6 +21,16 @@ export default function HomePage() {
   const [loadingMine, setLoadingMine]     = useState(true)
   const [loadingShared, setLoadingShared] = useState(true)
   const [folder, setFolder] = useState<string>('All')
+
+  // Long-press note-actions menu (Share / Duplicate / Delete) — see NoteCard's
+  // onLongPress. Store just the id and look the note up live from `notes` (see
+  // below) so the sheet always reflects the latest data — e.g. sharedWith
+  // right after adding an email — instead of a stale snapshot from the moment
+  // the menu opened. Tapping Share swaps to `shareTargetId` (the same
+  // ShareSheet the editor uses) instead of stacking sheets on top of each other.
+  const [menuNoteId, setMenuNoteId]     = useState<string | null>(null)
+  const [shareTargetId, setShareTargetId] = useState<string | null>(null)
+  useModalLock(!!menuNoteId || !!shareTargetId)
 
   // Notes I own.
   useEffect(() => {
@@ -54,6 +67,20 @@ export default function HomePage() {
     if (query.trim()) list = list.filter(n => noteMatchesSearch(n, query))
     return list
   }, [notes, folder, query])
+
+  const menuNote   = useMemo(() => notes.find(n => n.id === menuNoteId) ?? null, [notes, menuNoteId])
+  const shareTarget = useMemo(() => notes.find(n => n.id === shareTargetId) ?? null, [notes, shareTargetId])
+
+  const duplicate = async (n: Note) => {
+    if (!user) return
+    await duplicateNote(user.uid, user.email ?? '', n)
+    setMenuNoteId(null)
+  }
+
+  const remove = async (n: Note) => {
+    await deleteNote(n.id)
+    setMenuNoteId(null)
+  }
 
   return (
     <NotePage>
@@ -103,6 +130,7 @@ export default function HomePage() {
                   key={n.id}
                   note={n}
                   onClick={() => router.push(`/note/${n.id}`)}
+                  onLongPress={() => setMenuNoteId(n.id)}
                   isOwner={!!user && n.ownerId === user.uid}
                 />
               ))}
@@ -110,6 +138,21 @@ export default function HomePage() {
           </>
         )}
       </div>
+
+      {menuNote && (
+        <NoteActionsSheet
+          note={menuNote}
+          isOwner={!!user && menuNote.ownerId === user.uid}
+          onClose={() => setMenuNoteId(null)}
+          onShare={() => { setShareTargetId(menuNote.id); setMenuNoteId(null) }}
+          onDuplicate={() => duplicate(menuNote)}
+          onDelete={() => remove(menuNote)}
+        />
+      )}
+
+      {shareTarget && (
+        <ShareSheet note={shareTarget} onClose={() => setShareTargetId(null)} />
+      )}
     </NotePage>
   )
 }

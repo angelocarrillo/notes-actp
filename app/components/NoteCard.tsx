@@ -1,5 +1,5 @@
 'use client'
-import { Glass, N, noteA } from './NotesShell'
+import { Glass, N, noteA, useLongPress } from './NotesShell'
 import { type Note, noteSummary, dueInfo, type DueLevel } from '@/lib/notes'
 import { templateByType } from '@/lib/templates'
 
@@ -35,14 +35,30 @@ function TypeIcon({ path, color }: { path: string; color: string }) {
   )
 }
 
-export function NoteCard({ note, onClick, subtitle, isOwner = true }: {
-  note: Note; onClick: () => void; subtitle?: string; isOwner?: boolean
+export function NoteCard({ note, onClick, onLongPress, subtitle, isOwner = true }: {
+  note: Note; onClick: () => void; onLongPress?: () => void; subtitle?: string; isOwner?: boolean
 }) {
   const tpl    = templateByType(note.type)
   const shared = note.sharedWith?.length ?? 0
 
+  // Tap navigates in, hold opens the note-actions menu (Share / Duplicate /
+  // Delete). Routed entirely through pointer events — see useLongPress — so a
+  // long-press never also fires a stray tap-navigate right after it, and
+  // `noSelect` on Glass keeps iOS from highlighting the card's text while held.
+  const press = useLongPress(() => onLongPress?.(), onClick)
+  const longPressProps = onLongPress
+    ? {
+        onPointerDown: press.onPointerDown,
+        onPointerUp: press.onPointerUp,
+        onPointerCancel: press.onPointerCancel,
+        onContextMenu: press.onContextMenu,
+        onLongPressMove: press.onPointerMove,
+        noSelect: true,
+      }
+    : { onClick }
+
   return (
-    <Glass onClick={onClick} accent={tpl.accent} p={16} style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+    <Glass {...longPressProps} accent={tpl.accent} p={16} style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
         <div style={{
           width: 30, height: 30, borderRadius: 9, flexShrink: 0,

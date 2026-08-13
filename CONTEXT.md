@@ -72,6 +72,15 @@ rows (no dashed box), and the Blank Note page has no card around it at all. See
 Every structured note also has a freeform **Notes** field (`body`) at the bottom
 (borderless auto-growing textarea; only Blank notes use the rich editor for `body`).
 
+### Blank Note full-width canvas (2026-08-12)
+The editor's content container (`app/note/[noteId]/page.tsx`) caps structured
+note types (To-Do/Grocery/Timeline/Meal) at `maxWidth: 640` centered, since
+those read better as a form-like column. **Blank Note is exempted**
+(`maxWidth: note.type === 'blank' ? 'none' : 640`) so it fills the full window
+width (minus the 18px gutter) on any screen size — it's a plain CSS width, so
+it reflows live as the window is resized, and on phones it already fills the
+screen since phone widths are under 640 anyway.
+
 ### Freeform styling (2026-07-12)
 The note editor page (`app/note/[noteId]/page.tsx`) and `RichEditor.tsx` were
 stripped of card/box chrome to feel like a boundless canvas rather than a form:
@@ -166,6 +175,47 @@ mixed in with their own notes (matched by their Google email) — `NoteCard` get
 an `isOwner` prop and shows a **"Shared" tag** instead of the share-count badge
 when the viewer isn't the owner. Only the **owner** sees the Share and Delete
 controls in the editor; recipients see a "Shared with you" tag there too.
+The Share UI itself (`ShareSheet.tsx`) is a standalone component used both by
+the editor's Share button and by Home's long-press menu (see below) — same
+component, same bottom sheet, so the two entry points stay in sync for free.
+
+### Long-press note actions (Home, 2026-07-12)
+Holding a `NoteCard` on Home (not tapping — tapping still navigates into the
+note) opens a bottom sheet (`NoteActionsSheet.tsx`) with **Share, Duplicate,
+Delete** (owner) or just **Duplicate** (recipient of a shared note — they can
+copy it into their own note, but can't share/delete someone else's original).
+Delete uses the same tap-once-to-arm, tap-again-to-confirm pattern as the
+editor's delete button (3s window, `confirmDel` state).
+
+- **Tap vs. hold, without iOS highlighting the card's text.** This is driven
+  entirely by pointer events (`useLongPress` in `NotesShell.tsx`), not the
+  browser's native long-press/click, for two reasons: (1) iOS still fires a
+  synthetic click on touchend even after a long-press unless something upstream
+  prevents it — routing tap-vs-hold through one pointer-event state machine
+  means a long-press can never *also* fire a stray tap-navigate right after
+  itself; (2) `Glass` gets a `noSelect` prop (`-webkit-touch-callout: none`,
+  `user-select: none`) applied whenever a card is long-press-enabled, which is
+  what actually stops iOS's text-selection handles / copy-lookup callout from
+  appearing on hold — the pointer-event plumbing alone doesn't prevent that,
+  the CSS does. `useLongPress` fires after ~480ms of no >10px movement (a
+  scroll/drag cancels it and also suppresses the tap-on-release, so releasing
+  after scrolling past a card never accidentally opens it or navigates in).
+  Right-click / `onContextMenu` triggers the same menu on desktop.
+- **Live data, not a stale snapshot.** Home stores only the long-pressed note's
+  *id* (`menuNoteId` / `shareTargetId`), and looks the live `Note` up from the
+  already-subscribed `notes` array on every render — so if you add a share
+  while the sheet is open, the sheet reflects it immediately, and if the note
+  gets deleted elsewhere the sheet just disappears (`notes.find` returns
+  `null`) instead of operating on stale data.
+- **Duplicate** (`duplicateNote` in `lib/notes.ts`) creates a new note owned by
+  the current user, title suffixed `" copy"`, with **fresh item ids** (so the
+  copy's checklist never shares object identity with the source's) and
+  `sharedWith: []` even if the source was shared with others.
+- `Glass` (in `NotesShell.tsx`) grew optional pointer-event passthrough props
+  (`onPointerDown/Up/Cancel`, `onContextMenu`, `onLongPressMove`) plus
+  `noSelect`, so any card can opt into hold-to-open without Glass knowing the
+  details — `interactive` styling (`.lg-interactive`, cursor, lensing) now
+  triggers off `onClick` **or** `onPointerDown`.
 
 ### Editor autosave + concurrent edits
 The editor keeps a local working copy and **debounces saves (650ms)** via
@@ -329,15 +379,17 @@ app/
   shared/page.tsx               # Redirects to / (route kept for old links only)
   settings/page.tsx             # Account, accent, sign out
   components/
-    NotesShell.tsx              # Design system (tokens + components + BottomNav search pill)
-    NoteCard.tsx                # Note list card (isOwner prop → "Shared" tag)
+    NotesShell.tsx              # Design system (tokens + components + BottomNav search pill + useLongPress)
+    NoteCard.tsx                # Note list card (isOwner prop → "Shared" tag; long-press → actions menu)
+    NoteActionsSheet.tsx        # Long-press menu: Share / Duplicate / Delete
+    ShareSheet.tsx              # Share bottom sheet — shared by the editor and NoteActionsSheet
     SearchContext.tsx           # Global search-query context (pill ⇄ Home)
     AuthGate.tsx                # Google sign-in (+ ?token= silent sign-in)
     BottomNavWrapper.tsx        # Mounts the pill; hides on /note/*; syncs accent
   globals.css                   # Fonts + Liquid Glass + no-zoom rules + rich-editor type sizes
 lib/
   firebase.ts                   # Firebase init (shared config)
-  notes.ts                      # Note types, queries, CRUD, sharing helpers, noteMatchesSearch
+  notes.ts                      # Note types, queries, CRUD, sharing helpers, noteMatchesSearch, duplicateNote
   templates.ts                  # Template defs + seedNote()
   useModalLock.ts               # Ref-counted body[data-modal] (hides nav)
 ```
@@ -356,7 +408,8 @@ the setup steps in the chat / README.)
 - Folder organization (free-text folder + Home filter pills); folder also
   doubles as the note's searchable "tag".
 - Share individual notes by Google email (view + edit); shared notes appear on
-  Home with a "Shared" tag.
+  Home with a "Shared" tag. Long-press a note card for Share / Duplicate /
+  Delete without leaving Home.
 - Search (title / body / folder / item text) via the bottom pill.
 - Debounced autosave with idle remote-sync.
 - Accent theming; Liquid Glass design system ported from FitShell (kept for
@@ -389,6 +442,11 @@ the setup steps in the chat / README.)
   Enter-to-add checklist with a subtle per-row due-date icon and automatic
   same-date clustering. Grocery/Timeline/Meal fields and "Add row" buttons
   switched from boxed cards to underlines/plain rows (see *Freeform styling*).
+- **Long-press note actions (2026-07-12)** — holding a NoteCard on Home opens
+  Share / Duplicate / Delete (`NoteActionsSheet.tsx`); ShareSheet was pulled
+  out of the editor into its own component so both entry points share it. See
+  *Long-press note actions* above for the tap-vs-hold / no-text-selection
+  mechanics (`useLongPress` + `Glass`'s `noSelect`).
 
 ### Not yet done / ideas
 - Deploy to Vercel (needs GitHub repo + Vercel project; URL confirm).
