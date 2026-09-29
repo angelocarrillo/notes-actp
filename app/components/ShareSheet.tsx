@@ -29,7 +29,9 @@ export function ShareSheet({ note, onClose }: { note: Note; onClose: () => void 
 
   return (
     <div onClick={onClose} style={{
-      position: 'fixed', inset: 0, zIndex: 200, display: 'flex', alignItems: 'flex-end', justifyContent: 'center',
+      // bottom follows the keyboard so the email field stays visible (iOS 27).
+      position: 'fixed', top: 0, left: 0, right: 0, bottom: 'var(--kb-inset, 0px)',
+      zIndex: 200, display: 'flex', alignItems: 'flex-end', justifyContent: 'center',
       background: 'rgba(0,0,0,0.55)', backdropFilter: 'blur(4px)', WebkitBackdropFilter: 'blur(4px)',
     }}>
       <div onClick={e => e.stopPropagation()} style={{

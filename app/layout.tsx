@@ -3,6 +3,7 @@ import './globals.css'
 import AuthGate from './components/AuthGate'
 import BottomNavWrapper from './components/BottomNavWrapper'
 import { SearchProvider } from './components/SearchContext'
+import KeyboardInset from './components/KeyboardInset'
 
 export const metadata: Metadata = {
   title: 'Notes',
@@ -30,6 +31,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
             __html: "try{if(window.self!==window.top){document.documentElement.setAttribute('data-embedded','1')}}catch(e){document.documentElement.setAttribute('data-embedded','1')}",
           }}
         />
+        <KeyboardInset />
         <AuthGate>
           <SearchProvider>
             {children}

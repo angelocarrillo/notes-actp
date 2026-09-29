@@ -395,7 +395,12 @@ export function BottomNav() {
       // Embedded in the AIO iframe, env(safe-area-inset-bottom) reads 0, so also
       // honor --aio-safe-bottom (the real inset the AIO parent posts in). Uses
       // whichever is larger, so standalone and embedded both clear the indicator.
-      position: 'fixed', bottom: 'calc(max(env(safe-area-inset-bottom), var(--aio-safe-bottom, 0px)) + 16px)',
+      // iOS 27 no longer pans the page to reveal a focused input in a
+      // bottom-fixed bar, so standalone the keyboard covered the search box.
+      // The outer max() rides 10px above the keyboard (--kb-inset, see
+      // KeyboardInset.tsx) and falls back to the resting position when it's 0.
+      position: 'fixed',
+      bottom: 'max(calc(var(--kb-inset, 0px) + 10px), calc(max(env(safe-area-inset-bottom), var(--aio-safe-bottom, 0px)) + 16px))',
       left: '50%', width: 'min(420px, calc(100vw - 32px))',
       transform: `translateX(-50%) translateY(${visible && !modalOpen ? '0' : 'calc(100% + env(safe-area-inset-bottom) + 32px)'})`,
       transition: 'transform 0.38s cubic-bezier(0.32, 0.72, 0, 1)',

@@ -453,3 +453,11 @@ the setup steps in the chat / README.)
 - Optional tighter Firestore rules for `notes` (see above).
 - Per-share view-only permission, live co-editing merge, drag-reorder items.
 - A real multi-tag field, if Folder-as-tag ever feels too limiting (see *Search*).
+
+## iOS 27 keyboard fix (2026-09-29)
+**What broke:** up to iOS 26, Safari panned the page so a focused input inside a `position: fixed; bottom: 0` element scrolled into view above the keyboard. iOS 27 no longer does that pan, so bottom-anchored inputs stayed hidden behind the keyboard until it was dismissed. The layout viewport still does NOT shrink for the keyboard on iOS; only `window.visualViewport` does.
+**Fix in this app:**
+- `app/components/KeyboardInset.tsx` (mounted in `layout.tsx`) publishes `--kb-inset` on `<html>` = `innerHeight − (vv.height + vv.offsetTop)`, 0 when closed. Stays 0 inside the AIO iframe (the parent resizes the iframe there).
+- Bottom search bar (`NotesShell` BottomNav): `bottom: max(calc(var(--kb-inset) + 10px), <resting position>)` — rides 10px above the keyboard standalone.
+- ShareSheet overlay: `bottom: var(--kb-inset, 0px)` so the email field stays visible.
+- RichEditor's formatting pill already positions from `visualViewport` — unchanged.
